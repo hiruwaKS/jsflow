@@ -141,3 +141,4 @@ The solver builds constraints from operations like:
 - **Module Mode** (`-m`): Treats input as an npm module, analyzing exported functions and handling `require()` statements.
 
 - **Entry Function** (`-e`): Specifies which function to use as the entry point for analysis.
+

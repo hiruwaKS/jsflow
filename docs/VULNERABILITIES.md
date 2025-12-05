@@ -49,9 +49,25 @@ Identifies operations that can modify JavaScript object prototypes through funct
 
 **Example vulnerable pattern:**
 ```javascript
-const userInput = {__proto__: {isAdmin: true}};
-Object.assign({}, userInput); // Prototype pollution!
+// Using computed property name to create an actual __proto__ property
+const userInput = {['__proto__']: {isAdmin: true}};
+// A vulnerable merge function that recursively sets properties without validation
+function merge(target, source) {
+    for (let key in source) {
+        if (typeof source[key] === 'object' && source[key] !== null) {
+            if (!target[key]) target[key] = {};
+            merge(target[key], source[key]);
+        } else {
+            // Vulnerable: setting __proto__ changes the prototype of target
+            target[key] = source[key]; // Prototype pollution!
+        }
+    }
+}
+const config = {};
+merge(config, userInput); // Changes config's prototype, affecting all objects inheriting from it
 ```
+
+**Note:** The syntax `{__proto__: {foo: "bar"}}` is special JavaScript syntax that sets the prototype of the created object, not a property named `__proto__`. To create an actual `__proto__` property, use computed property syntax like `{['__proto__']: {foo: "bar"}}`. However, `Object.assign()` and similar functions using `Object.keys()` won't enumerate `__proto__` properties, and even if they did, setting `__proto__` via assignment calls the setter which changes the prototype of the destination object rather than polluting the global prototype chain. Prototype pollution typically occurs in custom merge/extend functions that recursively set properties without proper validation of `__proto__` or `constructor.prototype` keys.
 
 ## Internal Property Tampering
 
