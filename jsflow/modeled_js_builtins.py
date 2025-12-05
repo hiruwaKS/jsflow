@@ -1,3 +1,6 @@
+"""
+This module is used to model the built-in functions and objects of JavaScript.
+"""
 from .graph import Graph
 from .utilities import NodeHandleResult, BranchTag, BranchTagContainer, ExtraInfo, get_random_hex
 from .utilities import wildcard

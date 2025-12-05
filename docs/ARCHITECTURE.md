@@ -120,3 +120,4 @@ Analysis results are saved in timestamped directories under `logs/` (e.g., `logs
   - Line number
   - Vulnerability type
 
+

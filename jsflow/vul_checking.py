@@ -1,3 +1,6 @@
+"""
+This module is used to check the vulnerabilities of the code.
+"""
 from .trace_rule import TraceRule
 from .vul_func_lists import *
 

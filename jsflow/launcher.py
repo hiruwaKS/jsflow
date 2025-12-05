@@ -1,3 +1,7 @@
+"""
+This module is the main entry point for the jsflow tool.
+It is used to parse the command line arguments and run the analysis.
+"""
 import argparse
 import sys
 import sty

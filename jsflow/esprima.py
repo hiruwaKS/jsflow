@@ -1,3 +1,7 @@
+"""
+This module is used to parse JavaScript code into an Abstract Syntax Tree (AST) using Esprima.
+It is used in the opgen module to generate the object property graph.
+"""
 import os
 import subprocess
 import re

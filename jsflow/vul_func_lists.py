@@ -1,3 +1,7 @@
+"""
+This module is used to store the list of vulnerable function signatures.
+"""
+
 signature_lists = {
         'os_command': [
             "sink_hqbpillvul_execFile",

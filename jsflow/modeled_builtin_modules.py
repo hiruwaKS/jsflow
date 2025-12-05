@@ -1,3 +1,6 @@
+"""
+This module is used to model the built-in modules of Node.js.
+"""
 from .graph import Graph
 from .utilities import NodeHandleResult, BranchTag, BranchTagContainer
 from .utilities import wildcard

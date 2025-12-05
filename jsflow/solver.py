@@ -1,3 +1,6 @@
+"""
+
+"""
 from . import opgen
 from .graph import Graph
 from .utilities import wildcard

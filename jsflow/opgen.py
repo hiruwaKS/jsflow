@@ -1,3 +1,7 @@
+"""
+This module is used to generate the object property graph from the AST.
+"""
+
 from .graph import Graph
 from .utilities import NodeHandleResult, ExtraInfo
 from .utilities import BranchTag, BranchTagContainer, get_random_hex
@@ -2675,11 +2679,6 @@ def call_func_obj(G: Graph, func_obj, _args=[], _this=None, extra=None,
             for h in _args:
                 branch_used_objs.extend(to_obj_nodes(G, h, call_ast))
             if _this is not None:
-                # performance is too low
-                # for o in G.get_ancestors_in(func_obj, edge_types=[
-                #     'NAME_TO_OBJ', 'OBJ_TO_PROP'],
-                #     candidates=this.obj_nodes, step=2):
-                #     branch_used_objs.append(o)
                 branch_used_objs.extend(to_obj_nodes(G, _this, call_ast))
             body = G.get_child_nodes(func_ast, child_type='AST_STMT_LIST')[0]
             dummy_stmt = list(G.get_child_nodes(body, edge_type='PARENT_OF'))[0]

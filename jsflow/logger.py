@@ -1,3 +1,6 @@
+"""
+This module is used to log the messages to the console or file.
+"""
 import logging 
 import re
 import sty
