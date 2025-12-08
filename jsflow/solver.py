@@ -1,5 +1,10 @@
 """
+Constraint solving helpers built on top of z3.
 
+This module reconstructs symbolic constraints from the CONTRIBUTES_TO edges in
+the analysis graph to reason about possible concrete values at sinks. It is
+invoked by vulnerability checks to see whether an attack payload can satisfy
+the derived equations (strings, numbers, or mixed types).
 """
 from . import opgen
 from .graph import Graph
@@ -13,6 +18,7 @@ import z3
 import time
 
 class MixedSymbol:
+    """Thin wrapper that holds both string and numeric z3 symbols for a node."""
     def __init__(self, name, _type=None):
         super().__init__()
         self._number = None

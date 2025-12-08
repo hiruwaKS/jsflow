@@ -1,7 +1,13 @@
 """
+Trace rule definitions used to filter or validate vulnerability paths.
 
+The file hosts both legacy and newer rule implementations; TraceRule selects
+one based on `Graph.new_trace_rule`, providing a stable interface for callers
+that need to ask questions such as “does this path start in file X?” or “does
+it contain user input?”.
 """
 class TraceRuleInterface:
+    """Base interface to keep rule implementations aligned."""
     def __init__(self, key, value, G):
         pass
 

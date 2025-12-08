@@ -1,5 +1,10 @@
 """
+Higher-level helpers for condition evaluation, data/value extraction, and
+taint propagation.
 
+These routines complement opgen by interpreting JS conditions, converting
+between object nodes and literal values, and wiring CONTRIBUTES_TO edges to
+explain how data flows through expressions.
 """
 from .graph import Graph
 from .utilities import NodeHandleResult, ExtraInfo, get_random_hex

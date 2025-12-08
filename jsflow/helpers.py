@@ -1,5 +1,8 @@
 """
-
+Helper functions for interpreting literal values and manipulating object graph
+state during analysis. These utilities sit between the AST handlers and the
+Graph class, providing small conversions (e.g., JS literal evaluation,
+wildcard handling) and branch-aware copy helpers.
 """
 from .graph import Graph
 from .utilities import NodeHandleResult, ExtraInfo, BranchTag

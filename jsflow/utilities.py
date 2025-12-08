@@ -1,5 +1,10 @@
 """
+Shared utility classes and constants for jsflow.
 
+This module contains light-weight data carriers (e.g., NodeHandleResult,
+BranchTag), small enums, and helpers for representing intermediate state during
+AST handling and data-flow tracking. Keeping them here avoids circular imports
+between core modules such as graph and opgen.
 """
 import re
 from typing import List, Tuple, TypeVar, NoReturn
@@ -388,9 +393,9 @@ class ConditionTag:
         self.val2 = val2
 
     def __repr__(self):
-        if val2 is not None:
+        if self.val2 is not None:
             return f'{self.__class__.__name__}(' \
                 f'{repr(self.op)}, {repr(self.val1)}, {repr(self.val2)})'
         else:
-            return f'{self.__class__.__name__}({repr(op)}, {repr(self.val1)})'
+            return f'{self.__class__.__name__}({repr(self.op)}, {repr(self.val1)})'
 
