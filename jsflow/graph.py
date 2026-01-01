@@ -6,6 +6,7 @@ for building AST, control-flow, data-flow, and object-property graphs. It is
 the backbone that other modules (opgen, solver, etc.) rely on to create and
 traverse analysis results.
 """
+
 import networkx as nx
 import sys
 import csv
@@ -23,20 +24,21 @@ from collections import defaultdict, deque
 from queue import PriorityQueue
 import time
 
+
 class Graph:
     """
     Core graph data structure for representing JavaScript code analysis.
-    
+
     The Graph class maintains a NetworkX MultiDiGraph that represents:
     - Abstract Syntax Tree (AST) nodes from parsed JavaScript
     - Object property relationships
     - Data flow edges (REACHES, POINTS_TO, etc.)
     - Control flow edges (FLOWS_TO, ENTRY, EXIT)
     - Call relationships (CALLS)
-    
+
     The graph is built incrementally during symbolic analysis and used
     for vulnerability detection through path analysis.
-    
+
     Attributes:
         graph (nx.MultiDiGraph): The underlying NetworkX graph
         cur_objs (list): Current objects being tracked during execution
@@ -48,7 +50,7 @@ class Graph:
         ipt_use (set): Internal property tampering use locations
         vul_type (str): Type of vulnerability being checked
         log_dir (str): Directory for log files
-    
+
     Example:
         >>> G = Graph()
         >>> G.vul_type = 'os_command'
@@ -59,14 +61,14 @@ class Graph:
         self.graph = nx.MultiDiGraph()
         self.cur_objs = []
         self.cur_scope = None
-        self.cur_func = None # deprecated
+        self.cur_func = None  # deprecated
         self.cur_id = 0
-        self.entry_file_path = None # for logging purpose only
-        self.cur_file_path = None # deprecated, use G.get_cur_file_path()
+        self.entry_file_path = None  # for logging purpose only
+        self.cur_file_path = None  # deprecated, use G.get_cur_file_path()
         self.file_contents = {}
-        self.log_dir = None # log directory for this run
+        self.log_dir = None  # log directory for this run
         self.logger = create_logger("graph_logger", output_type="file")
-        self.mark_taint_vals = ['JSCPG_MARK_TAINT']
+        self.mark_taint_vals = ["JSCPG_MARK_TAINT"]
         self.cpg_node_cache = {}
 
         # for evaluation
@@ -92,7 +94,7 @@ class Graph:
         self.boolean_prototype = None
         self.regexp_prototype = None
         self.promise_prototype = None
-        
+
         self.builtin_constructors = []
         self.builtin_prototypes = []
 
@@ -100,14 +102,14 @@ class Graph:
         self.scope_counter = DictCounter()
 
         # contains a list of node ids based on the ast id
-        self.call_stack = [] # deprecated, only for debugging
-        self.for_stack = [] # for debugging
-        self.caller_counter = DictCounter() # callers (instead of callees)
+        self.call_stack = []  # deprecated, only for debugging
+        self.for_stack = []  # for debugging
+        self.caller_counter = DictCounter()  # callers (instead of callees)
         self.caller_stack = []
-        self.call_limit = 1 # 3
+        self.call_limit = 1  # 3
         self.file_stack = []
         self.require_obj_stack = []
-        self.cur_stmt = None # for building data flows
+        self.cur_stmt = None  # for building data flows
         self.function_returns = defaultdict(lambda: [])
 
         # Python-modeled built-in modules
@@ -165,7 +167,7 @@ class Graph:
         self.solve_from = None
         # self.solve_for = None
         self.solve_mode = 0
-        self.reverse_names = defaultdict(set) # for logging purpose only
+        self.reverse_names = defaultdict(set)  # for logging purpose only
         self.extra_constraints = []
         self.auto_exploit = False
         self.cur_source_name = None
@@ -179,7 +181,7 @@ class Graph:
         self.num_of_prec_cf_paths = 0
         self.num_of_full_cf_paths = 0
         self.dont_quit = False
-        self.scope_stack = [] # abandoned
+        self.scope_stack = []  # abandoned
 
         # task queues
         self.task_queue = deque()
@@ -195,10 +197,12 @@ class Graph:
 
         self.num_of_ast_nodes = None
 
-        csv.field_size_limit(2 ** 31 - 1)
+        csv.field_size_limit(2**31 - 1)
+
         class joern_dialect(csv.excel_tab):
             doublequote = False
-            escapechar = '\\'
+            escapechar = "\\"
+
         self.csv_dialect = joern_dialect
 
         self.graph_op_timing = DefaultDict(float)
@@ -232,17 +236,35 @@ class Graph:
             self.last_timing_reset_time = time.time()
         elif time.time() - self.last_timing_reset_time > 2:
             print(
-                sty.ef.inverse + sty.fg.yellow + 'Graph size' +
-                sty.rs.all + f' {self.graph.number_of_nodes()} {self.graph.number_of_edges()}'
-                + f' {time.time() - self.graph_start_time:.2f}s')
-            print( ' ' * 31 +
-                sty.ef.inverse + sty.fg.yellow + 'Cumulative' + sty.rs.all + '                   ' +
-                sty.ef.inverse + sty.fg.yellow + 'Recent' + sty.rs.all 
-                + f' {time.time() - self.last_timing_reset_time:.2f}s')
+                sty.ef.inverse
+                + sty.fg.yellow
+                + "Graph size"
+                + sty.rs.all
+                + f" {self.graph.number_of_nodes()} {self.graph.number_of_edges()}"
+                + f" {time.time() - self.graph_start_time:.2f}s"
+            )
+            print(
+                " " * 31
+                + sty.ef.inverse
+                + sty.fg.yellow
+                + "Cumulative"
+                + sty.rs.all
+                + "                   "
+                + sty.ef.inverse
+                + sty.fg.yellow
+                + "Recent"
+                + sty.rs.all
+                + f" {time.time() - self.last_timing_reset_time:.2f}s"
+            )
             for k in sorted(self.graph_op_timing.keys()):
-                print(f'{k:30s} {self.graph_op_timing[k]:6.2f}s {self.graph_op_num_of_times[k]:7d}x avg.{int(self.graph_op_timing[k]/self.graph_op_num_of_times[k]*1e6):5d}us ' + 
-                        (f'{self.graph_op_timing_recent[k]:.2f}s {self.graph_op_num_of_times_recent[k]:6d}x avg.{int(self.graph_op_timing_recent[k]/self.graph_op_num_of_times_recent[k]*1e6):5d}us'
-                            if self.graph_op_num_of_times_recent[k] != 0  else ''))
+                print(
+                    f"{k:30s} {self.graph_op_timing[k]:6.2f}s {self.graph_op_num_of_times[k]:7d}x avg.{int(self.graph_op_timing[k]/self.graph_op_num_of_times[k]*1e6):5d}us "
+                    + (
+                        f"{self.graph_op_timing_recent[k]:.2f}s {self.graph_op_num_of_times_recent[k]:6d}x avg.{int(self.graph_op_timing_recent[k]/self.graph_op_num_of_times_recent[k]*1e6):5d}us"
+                        if self.graph_op_num_of_times_recent[k] != 0
+                        else ""
+                    )
+                )
             self.last_timing_reset_time = time.time()
             self.graph_op_timing_recent.clear()
             self.graph_op_num_of_times_recent.clear()
@@ -291,19 +313,32 @@ class Graph:
         return a list of nodes with a specific node type
         as tuples of node id and attrs
         """
-        return [node for node in self.graph.nodes(data=data) if node[1].get('type') == node_type]
+        return [
+            node
+            for node in self.graph.nodes(data=data)
+            if node[1].get("type") == node_type
+        ]
 
     def get_nodes_by_type_and_flag(self, node_type, node_flag, data=True):
         """
         return a list of nodes with a specific node type and flag
         """
-        return [node[0] for node in self.graph.nodes(data=data) if node[1].get('type') == node_type and node[1].get('flags:string[]') == node_flag]
+        return [
+            node[0]
+            for node in self.graph.nodes(data=data)
+            if node[1].get("type") == node_type
+            and node[1].get("flags:string[]") == node_flag
+        ]
 
     def get_node_by_attr(self, key, value):
         """
         get a list of node by key and value
         """
-        return [node[0] for node in self.graph.nodes(data = True) if key in node[1] and node[1][key] == value]
+        return [
+            node[0]
+            for node in self.graph.nodes(data=True)
+            if key in node[1] and node[1][key] == value
+        ]
 
     def remove_nodes_from(self, remove_list):
         """
@@ -321,7 +356,7 @@ class Graph:
             mapping[node] = str(uuid.uuid4().int)
 
         self.graph = nx.relabel_nodes(self.graph, mapping)
-    
+
     # edges
 
     def add_edge(self, from_ID, to_ID, attr):
@@ -331,12 +366,12 @@ class Graph:
         """
         assert from_ID is not None, "Failed to add an edge, from_ID is None."
         assert to_ID is not None, "Failed to add an edge, to_ID is None."
-        assert from_ID != 'string' and to_ID != 'string'
+        assert from_ID != "string" and to_ID != "string"
         assert from_ID != wildcard
         assert to_ID != wildcard
         # self.graph.add_edges_from([(from_ID, to_ID, attr)])
         self.graph.add_edge(from_ID, to_ID, None, **attr)
-    
+
     def add_edge_if_not_exist(self, from_ID, to_ID, attr):
         """
         insert an edge to the graph if the graph does not already has the same edge
@@ -350,15 +385,17 @@ class Graph:
         else:
             for key, edge_attr in self.graph[from_ID][to_ID].items():
                 if edge_attr == attr:
-                    self.logger.warning("Edge {}->{} exists: {}, {}. Duplicate edge "
-                    "will not be created.".format(from_ID,to_ID,key,edge_attr))
+                    self.logger.warning(
+                        "Edge {}->{} exists: {}, {}. Duplicate edge "
+                        "will not be created.".format(from_ID, to_ID, key, edge_attr)
+                    )
                     return
             self.add_edge(from_ID, to_ID, attr)
 
     def set_edge_attr(self, from_ID, to_ID, edge_id, attr):
         self.graph[from_ID][to_ID][attr[0]][edge_id] = attr[1]
 
-    def get_edge_attr(self, from_ID, to_ID, edge_id = None):
+    def get_edge_attr(self, from_ID, to_ID, edge_id=None):
         if edge_id == None:
             return self.graph.get_edge_data(from_ID, to_ID)
         return self.graph[from_ID][to_ID][edge_id]
@@ -377,18 +414,26 @@ class Graph:
         """
         return the edges with a specific type
         """
-        subEdges = [edge for edge in self.graph.edges(data = True, keys=True) if edge[3]['type:TYPE'] == edge_type]
+        subEdges = [
+            edge
+            for edge in self.graph.edges(data=True, keys=True)
+            if edge[3]["type:TYPE"] == edge_type
+        ]
         return subEdges
 
     def get_edges_by_types(self, edge_types):
-        subEdges = [edge for edge in self.graph.edges(data = True, keys=True) if edge[3]['type:TYPE'] in edge_types]
+        subEdges = [
+            edge
+            for edge in self.graph.edges(data=True, keys=True)
+            if edge[3]["type:TYPE"] in edge_types
+        ]
         return subEdges
 
-    def get_edges_between(self, u, v, edge_type = None) -> dict:
+    def get_edges_between(self, u, v, edge_type=None) -> dict:
         result = {}
         try:
             for key, edge_attr in self.graph[u][v].items():
-                if not edge_type or edge_attr.get('type:TYPE') == edge_type:
+                if not edge_type or edge_attr.get("type:TYPE") == edge_type:
                     result[key] = edge_attr
         except KeyError:
             pass
@@ -404,27 +449,35 @@ class Graph:
             except nx.NetworkXError:
                 break
 
-    def get_out_edges(self, node_id, data = True, keys = True, edge_type = None):
+    def get_out_edges(self, node_id, data=True, keys=True, edge_type=None):
         assert node_id is not None
         if edge_type is None:
-            return self.graph.out_edges(node_id, data = data, keys = keys)
-        edges = self.graph.out_edges(node_id, data = data, keys = keys)
+            return self.graph.out_edges(node_id, data=data, keys=keys)
+        edges = self.graph.out_edges(node_id, data=data, keys=keys)
         idx = 1
         if keys == True:
             idx += 1
         if data == True:
             idx += 1
-        return [edge for edge in edges if 'type:TYPE' in edge[idx] and edge[idx]['type:TYPE'] == edge_type]
+        return [
+            edge
+            for edge in edges
+            if "type:TYPE" in edge[idx] and edge[idx]["type:TYPE"] == edge_type
+        ]
 
-    def get_in_edges(self, node_id, data = True, keys = True, edge_type = None):
+    def get_in_edges(self, node_id, data=True, keys=True, edge_type=None):
         assert node_id is not None
         if edge_type == None:
-            return self.graph.in_edges(node_id, data = data, keys = keys)
-        edges = self.graph.in_edges(node_id, data = data, keys = keys)
+            return self.graph.in_edges(node_id, data=data, keys=keys)
+        edges = self.graph.in_edges(node_id, data=data, keys=keys)
         idx = 2
         if keys == True:
             idx = 3
-        return [edge for edge in edges if 'type:TYPE' in edge[idx] and edge[idx]['type:TYPE'] == edge_type]
+        return [
+            edge
+            for edge in edges
+            if "type:TYPE" in edge[idx] and edge[idx]["type:TYPE"] == edge_type
+        ]
 
     def get_sub_graph_by_edge_type(self, edge_type):
         """
@@ -433,41 +486,42 @@ class Graph:
         """
         subEdges = self.get_edges_by_type(edge_type)
         return nx.MultiDiGraph(subEdges)
+
     # traversal
 
-    def dfs_edges(self, source, depth_limit = None):
+    def dfs_edges(self, source, depth_limit=None):
         """
         Iterate over edges in a depth-first-search (DFS).
         """
         return nx.dfs_edges(self.graph, source, depth_limit)
 
     def has_path(self, source, target):
-        '''
+        """
         Return True if there is a path from source to target, False
         otherwise.
-        '''
-        return nx.algorithms.shortest_paths.generic.has_path(
-            self.graph, source, target)
+        """
+        return nx.algorithms.shortest_paths.generic.has_path(self.graph, source, target)
 
     # import/export
 
     def import_from_string(self, string):
         # print('before importing', self.graph.number_of_nodes())
         try:
-            nodes, rels = string.split('\n\n')[:2]
+            nodes, rels = string.split("\n\n")[:2]
         except ValueError as e:
-            self.logger.error('AST generation failed!')
+            self.logger.error("AST generation failed!")
             raise e
 
         with io.StringIO(nodes) as fp:
             reader = csv.DictReader(fp, dialect=self.csv_dialect)
             for row in reader:
-                if 'id:ID' not in row:
+                if "id:ID" not in row:
                     continue
-                cur_id = row['id:ID']
+                cur_id = row["id:ID"]
                 self.add_node(cur_id)
                 for attr, val in row.items():
-                    if attr == 'id:ID': continue
+                    if attr == "id:ID":
+                        continue
                     self.set_node_attr(cur_id, (attr, val))
 
         with io.StringIO(rels) as fp:
@@ -476,11 +530,11 @@ class Graph:
             for row in reader:
                 attrs = dict(row)
                 try:
-                    del attrs['start:START_ID']
+                    del attrs["start:START_ID"]
                 except:
                     continue
-                del attrs['end:END_ID']
-                edge_list.append((row['start:START_ID'], row['end:END_ID'], attrs))
+                del attrs["end:END_ID"]
+                edge_list.append((row["start:START_ID"], row["end:END_ID"], attrs))
             self.add_edges_from_list(edge_list)
         self.logger.info(sty.ef.inverse + "Finished Importing" + sty.rs.all)
 
@@ -491,18 +545,20 @@ class Graph:
 
         if self.num_of_ast_nodes is None:
             self.num_of_ast_nodes = self.graph.number_of_nodes()
-        
-        self.toplevel_file_nodes = \
-            self.get_nodes_by_type_and_flag('AST_TOPLEVEL', 'TOPLEVEL_FILE')
+
+        self.toplevel_file_nodes = self.get_nodes_by_type_and_flag(
+            "AST_TOPLEVEL", "TOPLEVEL_FILE"
+        )
 
     def import_from_CSV(self, nodes_file_name, rels_file_name, offset=0):
         with open(nodes_file_name) as fp:
             reader = csv.DictReader(fp, dialect=self.csv_dialect)
             for row in reader:
-                cur_id = row['id:ID']
+                cur_id = row["id:ID"]
                 self.add_node(cur_id)
                 for attr, val in row.items():
-                    if attr == 'id:ID': continue
+                    if attr == "id:ID":
+                        continue
                     self.set_node_attr(cur_id, (attr, val))
 
         with open(rels_file_name) as fp:
@@ -510,67 +566,95 @@ class Graph:
             edge_list = []
             for row in reader:
                 attrs = dict(row)
-                del attrs['start:START_ID']
-                del attrs['end:END_ID']
-                edge_list.append((row['start:START_ID'], row['end:END_ID'], attrs))
+                del attrs["start:START_ID"]
+                del attrs["end:END_ID"]
+                edge_list.append((row["start:START_ID"], row["end:END_ID"], attrs))
             self.add_edges_from_list(edge_list)
         self.logger.info(sty.ef.inverse + "Finished Importing" + sty.rs.all)
-    
+
         # self.relabel_nodes()
         # reset cur_id
         self.cur_id = self.graph.number_of_nodes()
 
         if self.num_of_ast_nodes is None:
             self.num_of_ast_nodes = self.graph.number_of_nodes()
-        
-        self.toplevel_file_nodes = \
-            self.get_nodes_by_type_and_flag('AST_TOPLEVEL', 'TOPLEVEL_FILE')
 
-    def export_to_CSV(self, nodes_file_name, rels_file_name, light = False):
+        self.toplevel_file_nodes = self.get_nodes_by_type_and_flag(
+            "AST_TOPLEVEL", "TOPLEVEL_FILE"
+        )
+
+    def export_to_CSV(self, nodes_file_name, rels_file_name, light=False):
         """
         export to CSV to import to neo4j
         """
-        with open(nodes_file_name, 'w') as fp:
-            headers = ['id:ID','labels:label','type','flags:string[]','lineno:int','code','childnum:int','funcid:int','classname','namespace','endlineno:int','name','doccomment']
-            writer = csv.DictWriter(fp, dialect=self.csv_dialect, fieldnames=headers, extrasaction='ignore')
+        with open(nodes_file_name, "w") as fp:
+            headers = [
+                "id:ID",
+                "labels:label",
+                "type",
+                "flags:string[]",
+                "lineno:int",
+                "code",
+                "childnum:int",
+                "funcid:int",
+                "classname",
+                "namespace",
+                "endlineno:int",
+                "name",
+                "doccomment",
+            ]
+            writer = csv.DictWriter(
+                fp, dialect=self.csv_dialect, fieldnames=headers, extrasaction="ignore"
+            )
             writer.writeheader()
-            nodes = list(self.graph.nodes(data = True))
+            nodes = list(self.graph.nodes(data=True))
             # for node in nodes:
             #     if type(node[0]) != str:
             #         print(node)
-            nodes.sort(key = lambda x: int(x[0]))
+            nodes.sort(key=lambda x: int(x[0]))
             for node in nodes:
                 node_id, attr = node
                 row = dict(attr)
-                row['id:ID'] = node_id
+                row["id:ID"] = node_id
                 writer.writerow(row)
 
-        with open(rels_file_name, 'w') as fp:
-            headers = ['start:START_ID','end:END_ID','type:TYPE','var','taint_src','taint_dst']
-            writer = csv.DictWriter(fp, dialect=self.csv_dialect, fieldnames=headers, extrasaction='ignore')
+        with open(rels_file_name, "w") as fp:
+            headers = [
+                "start:START_ID",
+                "end:END_ID",
+                "type:TYPE",
+                "var",
+                "taint_src",
+                "taint_dst",
+            ]
+            writer = csv.DictWriter(
+                fp, dialect=self.csv_dialect, fieldnames=headers, extrasaction="ignore"
+            )
             writer.writeheader()
-            light_edge_type = ['FLOWS_TO', 'REACHES', 'OBJ_REACHES', 'ENTRY', 'EXIT']
+            light_edge_type = ["FLOWS_TO", "REACHES", "OBJ_REACHES", "ENTRY", "EXIT"]
             edges = []
             if light:
                 for edge_type in light_edge_type:
                     edges += self.get_edges_by_type(edge_type)
             else:
-                edges = list(self.graph.edges(data = True, keys = True))
+                edges = list(self.graph.edges(data=True, keys=True))
             for edge in edges:
                 edge_from, edge_to, _, attr = edge
                 row = dict(attr)
-                row['start:START_ID'] = edge_from
-                row['end:END_ID'] = edge_to
+                row["start:START_ID"] = edge_from
+                row["end:END_ID"] = edge_to
                 writer.writerow(row)
 
-        self.logger.info("Finished Exporting to {} and {}".format(nodes_file_name, rels_file_name))
+        self.logger.info(
+            "Finished Exporting to {} and {}".format(nodes_file_name, rels_file_name)
+        )
 
     def testing_benchmark_export_graph(self, file_path):
         """
         export graph to pickle format
         """
         nx.readwrite.write_gpickle(self.graph, file_path)
-        
+
     def export_graph(self, file_path):
         """
         export graph to pickle format
@@ -582,15 +666,15 @@ class Graph:
         """
         import a graph from a exported file
         """
-        with open(file_path, 'r') as fp:
+        with open(file_path, "r") as fp:
             dict_graph = json.load(fp)
-            
+
         self.graph = nx.Graph(dict_graph)
 
     def recount_cur_id(self):
         self.cur_id = 0
         for node in self.graph.nodes:
-            node_id = int(self.get_node_attr(node).get('id:ID'))
+            node_id = int(self.get_node_attr(node).get("id:ID"))
             if node_id >= self.cur_id:
                 self.cur_id = node_id + 1
 
@@ -626,22 +710,22 @@ class Graph:
         self.boolean_prototype = None
         self.regexp_prototype = None
         self.promise_prototype = None
-        
+
         self.builtin_constructors = []
         self.builtin_prototypes = []
-    
+
         # scope name counter
         self.scope_counter = DictCounter()
 
-        self.call_stack = [] # deprecated, only for debugging
-        self.for_stack = [] # for debugging
-        self.caller_counter = DictCounter() # callers (instead of callees)
+        self.call_stack = []  # deprecated, only for debugging
+        self.for_stack = []  # for debugging
+        self.caller_counter = DictCounter()  # callers (instead of callees)
         self.caller_stack = []
-        self.call_limit = 3 # 3
+        self.call_limit = 3  # 3
         self.file_stack = []
         self.require_obj_stack = []
         self.function_returns = defaultdict(lambda: [])
-    
+
         # Python-modeled built-in modules
         self.builtin_modules = {}
 
@@ -656,9 +740,9 @@ class Graph:
         self.highlighted_obj_nodes = set()
 
         # constraint solver
-        self.reverse_names = defaultdict(set) # for logging purpose only
+        self.reverse_names = defaultdict(set)  # for logging purpose only
         self.extra_constraints = []
-        
+
         # control flow & data flow
         self.last_stmts = []
 
@@ -678,44 +762,58 @@ class Graph:
         helper function, get the childern nodeid of the node_id
         return a dict, with {childnum: node_id}
         """
-        edges = self.get_out_edges(node_id, edge_type = "PARENT_OF")
+        edges = self.get_out_edges(node_id, edge_type="PARENT_OF")
         res = {}
         for edge in edges:
             node_attr = self.get_node_attr(edge[1])
-            if 'childnum:int' not in node_attr:
+            if "childnum:int" not in node_attr:
                 continue
-            res[node_attr['childnum:int']] = edge[1]
+            res[node_attr["childnum:int"]] = edge[1]
         return res
 
     def get_ordered_ast_child_nodes(self, node_id):
         """
         return AST children of a node in childnum order
         """
-        children = sorted(self._get_childern_by_childnum(node_id).items(),
-                            key=lambda x: int(x[0]))
+        children = sorted(
+            self._get_childern_by_childnum(node_id).items(), key=lambda x: int(x[0])
+        )
         if children:
             children = list(zip(*children))[1]
 
         return children
 
-    def get_child_nodes(self, node_id, edge_type=None, child_name=None,
-        child_type=None, child_label=None):
+    def get_child_nodes(
+        self,
+        node_id,
+        edge_type=None,
+        child_name=None,
+        child_type=None,
+        child_label=None,
+    ):
         """
         Return children of the node (with a specific edge type, name,
         node label, or node type).
         """
-        if edge_type is None and child_name is None and child_type is None \
-                and child_label is None:
+        if (
+            edge_type is None
+            and child_name is None
+            and child_type is None
+            and child_label is None
+        ):
             return self.graph.successors(node_id)
         res = set()
         edges = self.get_out_edges(node_id, edge_type=edge_type)
         for edge in edges:
             aim_node_attr = self.get_node_attr(edge[1])
-            if child_type is not None and aim_node_attr.get('type') != child_type:
+            if child_type is not None and aim_node_attr.get("type") != child_type:
                 continue
-            if child_name is not None and aim_node_attr.get('name') != child_name:
+            if child_name is not None and aim_node_attr.get("name") != child_name:
                 continue
-            if child_label is not None and aim_node_attr.get('labels:label') != child_label:
+            if (
+                child_label is not None
+                and aim_node_attr.get("labels:label") != child_label
+            ):
                 continue
             res.add(edge[1])
         return list(res)
@@ -731,9 +829,10 @@ class Graph:
         visited = set()
         bfs_queue.append((nodeid, 0))
 
-        while(len(bfs_queue)):
+        while len(bfs_queue):
             cur_node, cur_depth = bfs_queue.pop(0)
-            if max_depth and cur_depth > max_depth: break
+            if max_depth and cur_depth > max_depth:
+                break
 
             # if visited before, stop here
             if cur_node in visited:
@@ -743,18 +842,18 @@ class Graph:
 
             cur_attr = self.get_node_attr(cur_node)
 
-            if 'type' not in cur_attr:
+            if "type" not in cur_attr:
                 continue
-            if cur_attr['type'] == 'string':
-                if cur_attr.get('name'):
-                    return cur_attr['name']
-                if cur_attr.get('code'):
-                    return cur_attr['code']
-            elif cur_attr['type'] == 'integer':
-                return str(cur_attr['code'])
+            if cur_attr["type"] == "string":
+                if cur_attr.get("name"):
+                    return cur_attr["name"]
+                if cur_attr.get("code"):
+                    return cur_attr["code"]
+            elif cur_attr["type"] == "integer":
+                return str(cur_attr["code"])
 
             if order == 0:
-                children = self.get_child_nodes(cur_node, edge_type='PARENT_OF')
+                children = self.get_child_nodes(cur_node, edge_type="PARENT_OF")
             elif order > 0:
                 children = self.get_ordered_ast_child_nodes(cur_node)
             else:
@@ -766,28 +865,37 @@ class Graph:
     def get_stmt_by_line_no(self, ast_node, lineno, upward=True):
         parent = ast_node
         if upward:
-            while self.get_node_attr(parent).get('type') != 'AST_STMT_LIST':
-                edges = self.get_in_edges(parent, edge_type='PARENT_OF')
+            while self.get_node_attr(parent).get("type") != "AST_STMT_LIST":
+                edges = self.get_in_edges(parent, edge_type="PARENT_OF")
                 if edges:
                     parent = edges[0][0]
                 else:
                     return None
         children = self.get_ordered_ast_child_nodes(parent)
         for child in children:
-            child_lineno = self.get_node_attr(child).get('lineno:int')
-            child_endlineno = self.get_node_attr(child).get('endlineno:int')
+            child_lineno = self.get_node_attr(child).get("lineno:int")
+            child_endlineno = self.get_node_attr(child).get("endlineno:int")
             try:
                 if int(lineno) == int(child_lineno):
                     return child
-                elif child_endlineno and int(lineno) >= int(child_lineno) and \
-                    int(lineno) <= int(child_endlineno):
+                elif (
+                    child_endlineno
+                    and int(lineno) >= int(child_lineno)
+                    and int(lineno) <= int(child_endlineno)
+                ):
                     return child
             except (TypeError, ValueError) as e:
                 pass
         for child in children:
-            if self.get_node_attr(child).get('type') in ['AST_IF', 'AST_FOR',
-                'AST_WHILE', 'AST_SWITCH', 'AST_IF_ELEM', 'AST_SWITCH_LIST',
-                'AST_SWITCH_CASE']:
+            if self.get_node_attr(child).get("type") in [
+                "AST_IF",
+                "AST_FOR",
+                "AST_WHILE",
+                "AST_SWITCH",
+                "AST_IF_ELEM",
+                "AST_SWITCH_LIST",
+                "AST_SWITCH_CASE",
+            ]:
                 return self.get_stmt_by_line_no(child, lineno, upward=False)
 
     def is_statement(self, node_id):
@@ -797,21 +905,22 @@ class Graph:
         Args:
             node_id: the node_id
         """
-        parent_edges = self.get_in_edges(node_id, edge_type = "PARENT_OF")
+        parent_edges = self.get_in_edges(node_id, edge_type="PARENT_OF")
         if parent_edges is None or len(parent_edges) == 0:
-            return False 
+            return False
         parent_node = parent_edges[0][0]
         parent_node_attr = self.get_node_attr(parent_node)
-        if parent_node_attr.get('type') in ["AST_STMT_LIST"] and \
-                parent_node_attr.get('labels:label') != "Artificial_AST":
+        if (
+            parent_node_attr.get("type") in ["AST_STMT_LIST"]
+            and parent_node_attr.get("labels:label") != "Artificial_AST"
+        ):
             return True
         return False
-
 
     def find_nearest_upper_CPG_node(self, node_id):
         """
         Return the nearest upper CPG node of the input node.
-        
+
         A CPG node is defined as a child of a block node
         (AST_STMT_LIST).
         """
@@ -822,21 +931,21 @@ class Graph:
 
         while True:
             assert node_id is not None
-            parent_edges = self.get_in_edges(node_id, edge_type = "PARENT_OF")
+            parent_edges = self.get_in_edges(node_id, edge_type="PARENT_OF")
             # print('goes to', node_id, self.get_node_attr(node_id), parent_edges)
             if parent_edges is None or len(parent_edges) == 0:
                 # workaround for eval
                 # TODO: check if code in eval has scopes
                 self.cpg_node_cache[ori_node_id] = node_id
-                return node_id 
+                return node_id
             parent_node = parent_edges[0][0]
             parent_node_attr = self.get_node_attr(parent_node)
-            if parent_node_attr.get('type') in ["AST_STMT_LIST"]:
+            if parent_node_attr.get("type") in ["AST_STMT_LIST"]:
                 self.cpg_node_cache[ori_node_id] = node_id
-                return node_id 
+                return node_id
             node_id = parent_node
 
-    def get_all_child_nodes(self, node_id, max_depth = None):
+    def get_all_child_nodes(self, node_id, max_depth=None):
         """
         return a list of child node id, by bfs order
         Args:
@@ -849,9 +958,10 @@ class Graph:
         visited = set()
         bfs_queue.append((node_id, 0))
 
-        while(len(bfs_queue)):
+        while len(bfs_queue):
             cur_node, cur_depth = bfs_queue.pop(0)
-            if max_depth and cur_depth > max_depth: break
+            if max_depth and cur_depth > max_depth:
+                break
 
             # if visited before, stop here
             if cur_node in visited:
@@ -861,7 +971,7 @@ class Graph:
 
             cur_attr = self.get_node_attr(cur_node)
 
-            out_edges = self.get_out_edges(cur_node, edge_type = 'PARENT_OF')
+            out_edges = self.get_out_edges(cur_node, edge_type="PARENT_OF")
             out_nodes = [(edge[1], cur_depth + 1) for edge in out_edges]
             bfs_queue += out_nodes
 
@@ -872,10 +982,10 @@ class Graph:
 
     # name nodes and object nodes
 
-    def add_obj_node(self, ast_node=None, js_type='object', value=None):
-        '''
+    def add_obj_node(self, ast_node=None, js_type="object", value=None):
+        """
         Add an object node (including literal).
-        
+
         Args:
             ast_node (optional): The corresponding AST node.
                 Defaults to None.
@@ -885,13 +995,13 @@ class Graph:
                 'object'). Defaults to 'object'.
             value (str, optional): Value of a literal, represented by
                 JavaScript code. Defaults to None.
-        
+
         Returns:
             Added object node's node id.
-        '''
+        """
         obj_node = str(self._get_new_nodeid())
         self.add_node(obj_node)
-        self.set_node_attr(obj_node, ('labels:label', 'Object'))
+        self.set_node_attr(obj_node, ("labels:label", "Object"))
 
         if ast_node is not None:
             self.add_edge(obj_node, ast_node, {"type:TYPE": "OBJ_TO_AST"})
@@ -901,78 +1011,120 @@ class Graph:
         # (e.g. Object = function(){}), objects are still created with
         # original constructors (and prototypes).
         if js_type is None:
-            js_type = 'object'
+            js_type = "object"
         elif js_type == "function":
-            self.add_obj_as_prop("prototype", ast_node, "object",
-                    parent_obj=obj_node)
+            self.add_obj_as_prop("prototype", ast_node, "object", parent_obj=obj_node)
             if self.function_prototype is not None:
                 # prevent setting __proto__ before setup_object_and_function runs
-                self.add_obj_as_prop(prop_name="__proto__", parent_obj=
-                    obj_node, tobe_added_obj=self.function_prototype)
-                self.add_obj_as_prop(prop_name="constructor", parent_obj=
-                    obj_node, tobe_added_obj=self.function_cons)
+                self.add_obj_as_prop(
+                    prop_name="__proto__",
+                    parent_obj=obj_node,
+                    tobe_added_obj=self.function_prototype,
+                )
+                self.add_obj_as_prop(
+                    prop_name="constructor",
+                    parent_obj=obj_node,
+                    tobe_added_obj=self.function_cons,
+                )
         elif js_type == "object":
             if self.object_prototype is not None:
                 # prevent setting __proto__ before setup_object_and_function runs
-                self.add_obj_as_prop(prop_name="__proto__", parent_obj=
-                obj_node, tobe_added_obj=self.object_prototype)
-                self.add_obj_as_prop(prop_name="constructor", parent_obj=
-                    obj_node, tobe_added_obj=self.object_cons)
+                self.add_obj_as_prop(
+                    prop_name="__proto__",
+                    parent_obj=obj_node,
+                    tobe_added_obj=self.object_prototype,
+                )
+                self.add_obj_as_prop(
+                    prop_name="constructor",
+                    parent_obj=obj_node,
+                    tobe_added_obj=self.object_cons,
+                )
                 if self.check_proto_pollution and value == wildcard:
-                    self.add_obj_as_prop(prop_name="__proto__", parent_obj=
-                    obj_node, tobe_added_obj=self.array_prototype)
-                    self.add_obj_as_prop(prop_name="__proto__", parent_obj=
-                    obj_node, tobe_added_obj=self.number_prototype)
-                    self.add_obj_as_prop(prop_name="__proto__", parent_obj=
-                    obj_node, tobe_added_obj=self.string_prototype)
-                    self.add_obj_as_prop(prop_name="constructor", parent_obj=
-                    obj_node, tobe_added_obj=self.array_cons)
-                    self.add_obj_as_prop(prop_name="constructor", parent_obj=
-                    obj_node, tobe_added_obj=self.number_cons)
-                    self.add_obj_as_prop(prop_name="constructor", parent_obj=
-                    obj_node, tobe_added_obj=self.string_cons)
+                    self.add_obj_as_prop(
+                        prop_name="__proto__",
+                        parent_obj=obj_node,
+                        tobe_added_obj=self.array_prototype,
+                    )
+                    self.add_obj_as_prop(
+                        prop_name="__proto__",
+                        parent_obj=obj_node,
+                        tobe_added_obj=self.number_prototype,
+                    )
+                    self.add_obj_as_prop(
+                        prop_name="__proto__",
+                        parent_obj=obj_node,
+                        tobe_added_obj=self.string_prototype,
+                    )
+                    self.add_obj_as_prop(
+                        prop_name="constructor",
+                        parent_obj=obj_node,
+                        tobe_added_obj=self.array_cons,
+                    )
+                    self.add_obj_as_prop(
+                        prop_name="constructor",
+                        parent_obj=obj_node,
+                        tobe_added_obj=self.number_cons,
+                    )
+                    self.add_obj_as_prop(
+                        prop_name="constructor",
+                        parent_obj=obj_node,
+                        tobe_added_obj=self.string_cons,
+                    )
         elif js_type == "array":
             # js_type = 'object'     # don't change, keep 'array' type in graph
             if self.array_prototype is not None:
-                self.add_obj_as_prop(prop_name="__proto__", parent_obj=
-                obj_node, tobe_added_obj=self.array_prototype)
-                self.add_obj_as_prop(prop_name="constructor", parent_obj=
-                    obj_node, tobe_added_obj=self.array_cons)
+                self.add_obj_as_prop(
+                    prop_name="__proto__",
+                    parent_obj=obj_node,
+                    tobe_added_obj=self.array_prototype,
+                )
+                self.add_obj_as_prop(
+                    prop_name="constructor",
+                    parent_obj=obj_node,
+                    tobe_added_obj=self.array_cons,
+                )
         elif js_type == "string":
             if self.string_prototype is not None:
                 # prevent setting __proto__ before setup_object_and_function runs
-                self.add_obj_as_prop(prop_name="__proto__", parent_obj=
-                obj_node, tobe_added_obj=self.string_prototype)
-                self.add_obj_as_prop(prop_name="constructor", parent_obj=
-                    obj_node, tobe_added_obj=self.string_cons)
+                self.add_obj_as_prop(
+                    prop_name="__proto__",
+                    parent_obj=obj_node,
+                    tobe_added_obj=self.string_prototype,
+                )
+                self.add_obj_as_prop(
+                    prop_name="constructor",
+                    parent_obj=obj_node,
+                    tobe_added_obj=self.string_cons,
+                )
             if value is None or value == wildcard:
                 length = wildcard
             else:
                 value = str(value)
                 length = len(value)
-            self.add_obj_as_prop(prop_name="length", parent_obj=
-            obj_node, js_type='number', value=length)
+            self.add_obj_as_prop(
+                prop_name="length", parent_obj=obj_node, js_type="number", value=length
+            )
 
-        self.set_node_attr(obj_node, ('type', js_type))
+        self.set_node_attr(obj_node, ("type", js_type))
 
         if value is not None:
-            self.set_node_attr(obj_node, ('code', value))
+            self.set_node_attr(obj_node, ("code", value))
 
         return obj_node
 
-    def add_name_node(self, name, scope = None):
+    def add_name_node(self, name, scope=None):
         """
         helper function
         add a namenode to scope
         """
         cur_scope = self.cur_scope
         if scope != None:
-            cur_scope = scope 
+            cur_scope = scope
 
         new_name_node = str(self._get_new_nodeid())
         self.add_edge(cur_scope, new_name_node, {"type:TYPE": "SCOPE_TO_VAR"})
-        self.set_node_attr(new_name_node, ('labels:label', 'Name'))
-        self.set_node_attr(new_name_node, ('name', name))
+        self.set_node_attr(new_name_node, ("labels:label", "Name"))
+        self.set_node_attr(new_name_node, ("name", name))
         self.name_nodes.add(new_name_node)
         return new_name_node
 
@@ -988,15 +1140,24 @@ class Graph:
         """
         new_name_node = str(self._get_new_nodeid())
         self.add_node(new_name_node)
-        self.set_node_attr(new_name_node, ('labels:label', 'Name'))
-        self.set_node_attr(new_name_node, ('name', name))
-        self.add_edge_if_not_exist(parent_obj, new_name_node,
-            {"type:TYPE": "OBJ_TO_PROP"})
+        self.set_node_attr(new_name_node, ("labels:label", "Name"))
+        self.set_node_attr(new_name_node, ("name", name))
+        self.add_edge_if_not_exist(
+            parent_obj, new_name_node, {"type:TYPE": "OBJ_TO_PROP"}
+        )
         self.name_nodes.add(new_name_node)
         return new_name_node
 
-    def add_obj_as_prop(self, prop_name=None, ast_node=None, js_type='object', 
-        value=None, parent_obj=None, tobe_added_obj=None, combined=True):
+    def add_obj_as_prop(
+        self,
+        prop_name=None,
+        ast_node=None,
+        js_type="object",
+        value=None,
+        parent_obj=None,
+        tobe_added_obj=None,
+        combined=True,
+    ):
         """
         add (or put) an obj as a property of another obj
         parent_obj -> name node -> new obj / tobe_added_obj
@@ -1007,7 +1168,9 @@ class Graph:
         name_node = self.get_prop_name_node(prop_name, parent_obj)
 
         if name_node is None:
-            self.logger.debug(f'{sty.ef.b}Add name node{sty.rs.all} {prop_name} under obj {parent_obj}')
+            self.logger.debug(
+                f"{sty.ef.b}Add name node{sty.rs.all} {prop_name} under obj {parent_obj}"
+            )
             name_node = self.add_prop_name_node(prop_name, parent_obj)
 
         if tobe_added_obj is None:
@@ -1018,28 +1181,41 @@ class Graph:
             self.affected_name_nodes[-1].add(name_node)
 
         if combined and parent_obj == self.BASE_OBJ:
-            self.add_obj_to_scope(name=prop_name, scope=self.BASE_SCOPE,
-                tobe_added_obj=tobe_added_obj, combined=False)
+            self.add_obj_to_scope(
+                name=prop_name,
+                scope=self.BASE_SCOPE,
+                tobe_added_obj=tobe_added_obj,
+                combined=False,
+            )
         return tobe_added_obj
 
-
-    def add_obj_to_scope(self, name=None, ast_node=None, js_type='object',
-        value=None, scope=None, tobe_added_obj=None, combined=True):
+    def add_obj_to_scope(
+        self,
+        name=None,
+        ast_node=None,
+        js_type="object",
+        value=None,
+        scope=None,
+        tobe_added_obj=None,
+        combined=True,
+    ):
         """
         add a obj to a scope, if scope is None, add to current scope
         return the added node id
         """
         if scope == None:
-            scope = self.cur_scope 
+            scope = self.cur_scope
 
         # check if the name node exists first
         name_node = self.get_name_node(name, scope=scope, follow_scope_chain=False)
         if name_node == None:
-            self.logger.debug(f'{sty.ef.b}Add name node{sty.rs.all} {name} in scope {scope}')
+            self.logger.debug(
+                f"{sty.ef.b}Add name node{sty.rs.all} {name} in scope {scope}"
+            )
             name_node = str(self._get_new_nodeid())
             self.add_edge(scope, name_node, {"type:TYPE": "SCOPE_TO_VAR"})
-            self.set_node_attr(name_node, ('labels:label', 'Name'))
-            self.set_node_attr(name_node, ('name', name))
+            self.set_node_attr(name_node, ("labels:label", "Name"))
+            self.set_node_attr(name_node, ("name", name))
             self.name_nodes.add(name_node)
 
         if tobe_added_obj == None:
@@ -1052,15 +1228,25 @@ class Graph:
             self.affected_name_nodes[-1].add(name_node)
 
         if combined and scope == self.BASE_SCOPE:
-            self.add_obj_as_prop(prop_name=name, parent_obj=self.BASE_OBJ,
-                tobe_added_obj=tobe_added_obj, combined=False)
+            self.add_obj_as_prop(
+                prop_name=name,
+                parent_obj=self.BASE_OBJ,
+                tobe_added_obj=tobe_added_obj,
+                combined=False,
+            )
 
         return tobe_added_obj
 
     add_obj_to_name = add_obj_to_scope
 
-    def add_obj_to_name_node(self, name_node, ast_node=None, js_type='object',
-        value=None, tobe_added_obj=None):
+    def add_obj_to_name_node(
+        self,
+        name_node,
+        ast_node=None,
+        js_type="object",
+        value=None,
+        tobe_added_obj=None,
+    ):
         """
         Add a new object (or put a existing object) under a name node.
 
@@ -1075,7 +1261,7 @@ class Graph:
 
         return tobe_added_obj
 
-    def get_name_node(self, var_name, scope = None, follow_scope_chain = True):
+    def get_name_node(self, var_name, scope=None, follow_scope_chain=True):
         """
         Get the name node of a name based on scope.
         """
@@ -1083,34 +1269,38 @@ class Graph:
             scope = self.cur_scope
 
         while True:
-            var_edges = self.get_out_edges(scope, data = True, keys = True, edge_type = "SCOPE_TO_VAR")
+            var_edges = self.get_out_edges(
+                scope, data=True, keys=True, edge_type="SCOPE_TO_VAR"
+            )
             for cur_edge in var_edges:
                 cur_var_attr = self.get_node_attr(cur_edge[1])
-                if cur_var_attr['name'] == var_name:
+                if cur_var_attr["name"] == var_name:
                     return cur_edge[1]
             if not follow_scope_chain:
                 break
-            scope_edges = self.get_in_edges(scope, data = True, keys = True, edge_type = "PARENT_SCOPE_OF")
+            scope_edges = self.get_in_edges(
+                scope, data=True, keys=True, edge_type="PARENT_SCOPE_OF"
+            )
             if len(scope_edges) == 0:
                 break
             scope = list(scope_edges)[0][0]
         return None
 
     def get_objs_by_name_node(self, name_node, branches=None):
-        '''
+        """
         Get corresponding object nodes of a name node.
-        
+
         Args:
             name_node: the name node.
             branches (BranchTagContainer, optional): branch information.
                 Default to None.
-        
+
         Returns:
             list: list of object nodes.
-        '''
+        """
         if name_node is None:
             return []
-        out_edges = self.get_out_edges(name_node, edge_type='NAME_TO_OBJ')
+        out_edges = self.get_out_edges(name_node, edge_type="NAME_TO_OBJ")
         objs = set([edge[1] for edge in out_edges])
         if branches:
             # initiate a dictionary that records if the object exists in the current branch
@@ -1118,28 +1308,38 @@ class Graph:
             for obj in objs:
                 has_obj[obj] = False
             # check edges without branch tag
-            for _, obj, _, attr in self.get_out_edges(name_node, edge_type='NAME_TO_OBJ'):
-                branch_tag = attr.get('branch')
-                for_tags = self.get_node_attr(obj).get('for_tags')
+            for _, obj, _, attr in self.get_out_edges(
+                name_node, edge_type="NAME_TO_OBJ"
+            ):
+                branch_tag = attr.get("branch")
+                for_tags = self.get_node_attr(obj).get("for_tags")
                 if branch_tag is None:
                     has_obj[obj] = True
             # for each branch in branch history
             # we check from the oldest (shallowest) to the most recent (deepest)
             for branch in branches:
                 # check which edge matches the current checking branch
-                for _, obj, _, attr in self.get_out_edges(name_node, edge_type='NAME_TO_OBJ'):
-                    tag = attr.get('branch')
-                    if tag and tag.point == branch.point and tag.branch == branch.branch:
-                        if tag.mark == 'A':
+                for _, obj, _, attr in self.get_out_edges(
+                    name_node, edge_type="NAME_TO_OBJ"
+                ):
+                    tag = attr.get("branch")
+                    if (
+                        tag
+                        and tag.point == branch.point
+                        and tag.branch == branch.branch
+                    ):
+                        if tag.mark == "A":
                             # if the object is added (assigned) in that branch
-                             has_obj[obj] = True
-                        elif tag.mark == 'D':
+                            has_obj[obj] = True
+                        elif tag.mark == "D":
                             # if the object is removed in that branch
                             has_obj[obj] = False
-                    for tag in self.get_node_attr(obj).get('for_tags', []):
+                    for tag in self.get_node_attr(obj).get("for_tags", []):
                         if tag.point == branch.point:
-                            if branch.branch is not None and \
-                                tag.branch != branch.branch:
+                            if (
+                                branch.branch is not None
+                                and tag.branch != branch.branch
+                            ):
                                 # if the object is used as the loop variable
                                 # or created in another branch of that
                                 # branching point
@@ -1152,18 +1352,18 @@ class Graph:
     get_obj_nodes = get_objs_by_name_node
 
     def get_objs_by_name(self, var_name, scope=None, branches=[]):
-        '''
+        """
         Get object nodes by a variable name.
-        
+
         Args:
             var_name (str): variable name.
             scope (optional): scope to find the variable in. Defaults to
                 current scope.
             branches (list, optional): branch information.
-        
+
         Returns:
             list: list of object nodes.
-        '''
+        """
         # if var_name == 'this':    # "this" will be handled in handle_node
         #     return self.cur_objs
         name_node = self.get_name_node(var_name, scope)
@@ -1171,17 +1371,17 @@ class Graph:
             return []
         return self.get_objs_by_name_node(name_node, branches)
 
-    def get_prop_names(self, parent_obj, exclude_proto=True,
-        numeric_only=False, exclude_wildcard=False):
+    def get_prop_names(
+        self, parent_obj, exclude_proto=True, numeric_only=False, exclude_wildcard=False
+    ):
         s = set()
         for name_node in self.get_prop_name_nodes(parent_obj):
-            name = self.get_node_attr(name_node).get('name')
-            if exclude_proto and name in [
-                    'prototype', '__proto__', 'constructor']:
+            name = self.get_node_attr(name_node).get("name")
+            if exclude_proto and name in ["prototype", "__proto__", "constructor"]:
                 continue
             if numeric_only:
                 if not (name == wildcard or isinstance(name, _SpecialValue)):
-                    try: # check if x is an integer
+                    try:  # check if x is an integer
                         _ = int(name)
                     except ValueError:
                         continue
@@ -1193,46 +1393,59 @@ class Graph:
 
     get_keys = get_prop_names
 
-    def get_prop_name_nodes(self, parent_obj=None, exclude_proto=False,
-        numeric_only=False, exclude_wildcard=False):
-        name_nodes = self.get_child_nodes(parent_obj, edge_type='OBJ_TO_PROP')
+    def get_prop_name_nodes(
+        self,
+        parent_obj=None,
+        exclude_proto=False,
+        numeric_only=False,
+        exclude_wildcard=False,
+    ):
+        name_nodes = self.get_child_nodes(parent_obj, edge_type="OBJ_TO_PROP")
         if exclude_proto:
             name_nodes = filter(
-                lambda x: self.get_node_attr(x).get('name') not in
-                    ['prototype', '__proto__', 'constructor'],
-                name_nodes)
+                lambda x: self.get_node_attr(x).get("name")
+                not in ["prototype", "__proto__", "constructor"],
+                name_nodes,
+            )
         if numeric_only:
+
             def is_name_int(node):
-                name = self.get_node_attr(node).get('name')
+                name = self.get_node_attr(node).get("name")
                 if name == wildcard:
                     return True
                 elif isinstance(name, _SpecialValue):
                     return False
                 else:
-                    try: # check if x is an integer
+                    try:  # check if x is an integer
                         _ = int(name)
                     except ValueError:
                         return False
                     return True
+
             name_nodes = filter(is_name_int, name_nodes)
         if exclude_wildcard:
             name_nodes = filter(
-                lambda x: self.get_node_attr(x).get('name') != wildcard,
-                name_nodes)
+                lambda x: self.get_node_attr(x).get("name") != wildcard, name_nodes
+            )
         return list(name_nodes)
 
     def get_prop_name_node(self, prop_name, parent_obj=None):
         for name_node in self.get_prop_name_nodes(parent_obj):
-            if self.get_node_attr(name_node).get('name') == prop_name:
+            if self.get_node_attr(name_node).get("name") == prop_name:
                 return name_node
         return None
 
-    def get_prop_obj_nodes(self, parent_obj, prop_name=None,
-        branches: List[BranchTag]=[], exclude_proto=True,
-        numeric_only=False):
-        '''
+    def get_prop_obj_nodes(
+        self,
+        parent_obj,
+        prop_name=None,
+        branches: List[BranchTag] = [],
+        exclude_proto=True,
+        numeric_only=False,
+    ):
+        """
         Get object nodes of an object's property.
-        
+
         Args:
             parent_obj (optional): Defaults to None (current object).
             prop_name (str, optional): Property name. Defaults to None,
@@ -1242,14 +1455,15 @@ class Graph:
             exclude_proto (bool, optional): Whether exclude prototype
                 and __proto__ when getting all properties.
                 Defaults to True.
-        
+
         Returns:
             list: object nodes.
-        '''
+        """
         s = set()
-        if prop_name is None: # this caused inconsistent run results
-            name_nodes = self.get_prop_name_nodes(parent_obj,
-                exclude_proto=exclude_proto, numeric_only=numeric_only)
+        if prop_name is None:  # this caused inconsistent run results
+            name_nodes = self.get_prop_name_nodes(
+                parent_obj, exclude_proto=exclude_proto, numeric_only=numeric_only
+            )
             for name_node in name_nodes:
                 s.update(self.get_obj_nodes(name_node, branches))
         else:
@@ -1257,11 +1471,12 @@ class Graph:
             s.update(self.get_obj_nodes(name_node, branches))
         return list(s)
 
-    def assign_obj_nodes_to_name_node(self, name_node, obj_nodes, multi=False,
-        branches=BranchTagContainer()):
-        '''
+    def assign_obj_nodes_to_name_node(
+        self, name_node, obj_nodes, multi=False, branches=BranchTagContainer()
+    ):
+        """
         Assign (multiple) object nodes to a name node.
-        
+
         Args:
             name_node: where to put the objects.
             obj_nodes: objects to be assigned.
@@ -1271,40 +1486,52 @@ class Graph:
                 Defaults to False.
             branches (List[BranchTag], optional):
                 List of branch tags. Defaults to [].
-        '''
+        """
         branch = branches.get_last_choice_tag()
         # remove previous objects
         pre_objs = self.get_objs_by_name_node(name_node, branches)
-        self.logger.debug(f'Assigning {obj_nodes} to {name_node}, ' \
-            f'pre_objs={pre_objs}, branches={branches}')
+        self.logger.debug(
+            f"Assigning {obj_nodes} to {name_node}, "
+            f"pre_objs={pre_objs}, branches={branches}"
+        )
         if pre_objs and not multi:
             for obj in pre_objs:
                 if branch:
                     # check if any addition (assignment) exists
                     # in current branch
                     flag = False
-                    for key, edge_attr in self.get_edges_between(name_node, obj,
-                        'NAME_TO_OBJ').items():
-                        tag = edge_attr.get('branch', BranchTag())
-                        if tag == BranchTag(branch, mark='A'):
+                    for key, edge_attr in self.get_edges_between(
+                        name_node, obj, "NAME_TO_OBJ"
+                    ).items():
+                        tag = edge_attr.get("branch", BranchTag())
+                        if tag == BranchTag(branch, mark="A"):
                             # if addition exists, delete the addition edge
                             self.graph.remove_edge(name_node, obj, key)
                             flag = True
                     if not flag:
                         # if no addition, add a deletion edge
-                        self.add_edge(name_node, obj,{'type:TYPE':
-                        'NAME_TO_OBJ', 'branch': BranchTag(branch, mark='D')})
+                        self.add_edge(
+                            name_node,
+                            obj,
+                            {
+                                "type:TYPE": "NAME_TO_OBJ",
+                                "branch": BranchTag(branch, mark="D"),
+                            },
+                        )
                         if self.affected_name_nodes:
                             self.affected_name_nodes[-1].add(name_node)
                 else:
                     # do not use "remove_edge", which cannot remove all edges
                     self.remove_all_edges_between(name_node, obj)
-                    self.logger.debug('  Remove ' + obj)
+                    self.logger.debug("  Remove " + obj)
         # add new objects to name node
         for obj in obj_nodes:
             if branch:
-                self.add_edge(name_node, obj, {"type:TYPE": "NAME_TO_OBJ",
-                "branch": BranchTag(branch, mark='A')})
+                self.add_edge(
+                    name_node,
+                    obj,
+                    {"type:TYPE": "NAME_TO_OBJ", "branch": BranchTag(branch, mark="A")},
+                )
             else:
                 self.add_edge(name_node, obj, {"type:TYPE": "NAME_TO_OBJ"})
             if self.affected_name_nodes:
@@ -1314,36 +1541,36 @@ class Graph:
         """
         Find where in the AST an object (especially a function) is
         defined.
-        
+
         The AST node is the successor of the object node via the
         OBJ_TO_AST edge.
         """
         aim_map = {
-                'function': ['AST_FUNC_DECL', 'AST_CLOSURE', 'AST_METHOD'],
-                }
-        tmp_edge = self.get_out_edges(obj_node, data = True, keys = True,
-            edge_type = "OBJ_TO_AST")
+            "function": ["AST_FUNC_DECL", "AST_CLOSURE", "AST_METHOD"],
+        }
+        tmp_edge = self.get_out_edges(
+            obj_node, data=True, keys=True, edge_type="OBJ_TO_AST"
+        )
         if not tmp_edge:
             return None
         else:
             if aim_type is not None:
                 for edge in tmp_edge:
-                    cur_type = self.get_node_attr(edge[1]).get('type')
+                    cur_type = self.get_node_attr(edge[1]).get("type")
                     if cur_type in aim_map[aim_type]:
                         return edge[1]
             else:
                 for edge in tmp_edge:
-                    cur_type = self.get_node_attr(edge[1]).get('type')
-                    if cur_type not in aim_map['function']:
+                    cur_type = self.get_node_attr(edge[1]).get("type")
+                    if cur_type not in aim_map["function"]:
                         return edge[1]
 
             return tmp_edge[0][1]
 
-
     def copy_obj(self, obj_node, ast_node=None, copied=None, deep=False):
-        '''
+        """
         Copy an object and its properties.
-        '''
+        """
         start = time.time()
         if copied is None:
             copied = set()
@@ -1351,25 +1578,24 @@ class Graph:
         new_obj_node = str(self._get_new_nodeid())
         self.add_node(new_obj_node, self.get_node_attr(obj_node))
         # copy properties
-        for i in self.get_out_edges(obj_node, edge_type='OBJ_TO_PROP'):
+        for i in self.get_out_edges(obj_node, edge_type="OBJ_TO_PROP"):
             # copy property name node
             prop_name_node = i[1]
             new_prop_name_node = str(self._get_new_nodeid())
-            self.add_node(new_prop_name_node,
-                          self.get_node_attr(prop_name_node))
-            self.add_edge(new_obj_node, new_prop_name_node,
-                          {'type:TYPE': 'OBJ_TO_PROP'})
-            if self.get_node_attr(prop_name_node).get('name') == '__proto__':
-                for j in self.get_out_edges(prop_name_node, edge_type=
-                    'NAME_TO_OBJ'):
-                    self.add_edge(new_prop_name_node, j[1],
-                        {'type:TYPE': 'NAME_TO_OBJ'})
+            self.add_node(new_prop_name_node, self.get_node_attr(prop_name_node))
+            self.add_edge(
+                new_obj_node, new_prop_name_node, {"type:TYPE": "OBJ_TO_PROP"}
+            )
+            if self.get_node_attr(prop_name_node).get("name") == "__proto__":
+                for j in self.get_out_edges(prop_name_node, edge_type="NAME_TO_OBJ"):
+                    self.add_edge(
+                        new_prop_name_node, j[1], {"type:TYPE": "NAME_TO_OBJ"}
+                    )
                     if self.affected_name_nodes:
                         self.affected_name_nodes[-1].add(new_prop_name_node)
                 continue
             # copy property object nodes
-            for j in self.get_out_edges(prop_name_node, edge_type=
-                'NAME_TO_OBJ'):
+            for j in self.get_out_edges(prop_name_node, edge_type="NAME_TO_OBJ"):
                 if deep:
                     # sometimes this loop may dead inside a graph with a circle
                     # check whether we copied this node before
@@ -1378,75 +1604,88 @@ class Graph:
                     copied.add(j[1])
                     new_prop_obj_node = self.copy_obj(j[1], ast_node, copied, deep)
                     # self.add_node(new_prop_obj_node, self.get_node_attr(j[1])) # ?
-                    self.add_edge(new_prop_name_node, new_prop_obj_node,
-                        {'type:TYPE': 'NAME_TO_OBJ'})
+                    self.add_edge(
+                        new_prop_name_node,
+                        new_prop_obj_node,
+                        {"type:TYPE": "NAME_TO_OBJ"},
+                    )
                     if self.affected_name_nodes:
                         self.affected_name_nodes[-1].add(new_prop_name_node)
                 else:
-                    self.add_edge(new_prop_name_node, j[1],
-                        {'type:TYPE': 'NAME_TO_OBJ'})
+                    self.add_edge(
+                        new_prop_name_node, j[1], {"type:TYPE": "NAME_TO_OBJ"}
+                    )
                     if self.affected_name_nodes:
                         self.affected_name_nodes[-1].add(new_prop_name_node)
         # copy OBJ_DECL edges
-        for e in self.get_out_edges(obj_node, edge_type='OBJ_DECL'):
-            self.add_edge(new_obj_node, e[1], {'type:TYPE': 'OBJ_DECL'})
+        for e in self.get_out_edges(obj_node, edge_type="OBJ_DECL"):
+            self.add_edge(new_obj_node, e[1], {"type:TYPE": "OBJ_DECL"})
         if ast_node is not None:
             # assign new OBJ_TO_AST edges
-            self.add_edge(new_obj_node, ast_node, {'type:TYPE': 'OBJ_TO_AST'})
+            self.add_edge(new_obj_node, ast_node, {"type:TYPE": "OBJ_TO_AST"})
         else:
             # copy OBJ_TO_AST edges
-            for e in self.get_out_edges(obj_node, edge_type='OBJ_TO_AST'):
-                self.add_edge(new_obj_node, e[1], {'type:TYPE': 'OBJ_TO_AST'})
-        self.timing('copy_obj', time.time() - start)
+            for e in self.get_out_edges(obj_node, edge_type="OBJ_TO_AST"):
+                self.add_edge(new_obj_node, e[1], {"type:TYPE": "OBJ_TO_AST"})
+        self.timing("copy_obj", time.time() - start)
         return new_obj_node
-
 
     # scopes
 
-    def add_scope(self, scope_type, decl_ast=None, scope_name=None,
-        decl_obj=None, caller_ast=None, func_name=None, parent_scope=None):
+    def add_scope(
+        self,
+        scope_type,
+        decl_ast=None,
+        scope_name=None,
+        decl_obj=None,
+        caller_ast=None,
+        func_name=None,
+        parent_scope=None,
+    ):
         """
         Add a new scope under current scope.
 
         If the scope already exists, return it without adding a new one.
         """
         new_scope_node = str(self._get_new_nodeid())
-        self.add_node(new_scope_node, {'labels:label': 'Scope',
-            'type': scope_type, 'name': scope_name})
+        self.add_node(
+            new_scope_node,
+            {"labels:label": "Scope", "type": scope_type, "name": scope_name},
+        )
         if decl_ast is not None:
-            self.add_edge(new_scope_node, decl_ast,
-                {'type:TYPE': 'SCOPE_TO_AST'})
+            self.add_edge(new_scope_node, decl_ast, {"type:TYPE": "SCOPE_TO_AST"})
         if parent_scope is None:
             if self.cur_scope is not None:
-                self.add_edge(self.cur_scope, new_scope_node,
-                    {'type:TYPE': 'PARENT_SCOPE_OF'})
+                self.add_edge(
+                    self.cur_scope, new_scope_node, {"type:TYPE": "PARENT_SCOPE_OF"}
+                )
             else:
                 self.cur_scope = new_scope_node
         else:
-            self.add_edge(parent_scope, new_scope_node,
-                {'type:TYPE': 'PARENT_SCOPE_OF'})
+            self.add_edge(
+                parent_scope, new_scope_node, {"type:TYPE": "PARENT_SCOPE_OF"}
+            )
         if decl_obj is not None:
-            self.add_edge(decl_obj, new_scope_node,
-                {'type:TYPE': 'OBJ_TO_SCOPE'})
+            self.add_edge(decl_obj, new_scope_node, {"type:TYPE": "OBJ_TO_SCOPE"})
         if caller_ast is not None:
-            self.add_edge(new_scope_node, caller_ast,
-                {'type:TYPE': 'SCOPE_TO_CALLER'})
+            self.add_edge(new_scope_node, caller_ast, {"type:TYPE": "SCOPE_TO_CALLER"})
         if func_name is not None:
-            self.set_node_attr(new_scope_node, ('func_name', func_name))
+            self.set_node_attr(new_scope_node, ("func_name", func_name))
         return new_scope_node
 
-    def find_ancestor_scope(self, scope_types=['FUNC_SCOPE', 'FILE_SCOPE'],
-        cur_scope=None):
-        '''
+    def find_ancestor_scope(
+        self, scope_types=["FUNC_SCOPE", "FILE_SCOPE"], cur_scope=None
+    ):
+        """
         Find ancestor (file/function) scope from the current (block)
         scope.
-        '''
+        """
         if cur_scope is None:
             cur_scope = self.cur_scope
         while True:
-            if self.get_node_attr(cur_scope).get('type') in scope_types:
+            if self.get_node_attr(cur_scope).get("type") in scope_types:
                 return cur_scope
-            edges = self.get_in_edges(cur_scope, edge_type='PARENT_SCOPE_OF')
+            edges = self.get_in_edges(cur_scope, edge_type="PARENT_SCOPE_OF")
             if edges:
                 cur_scope = edges[0][0]
             else:
@@ -1457,11 +1696,13 @@ class Graph:
     def get_func_decl_objs_by_ast_node(self, ast_node, scope=None):
         start = time.time()
         objs = []
-        edges = self.get_in_edges(ast_node, edge_type='OBJ_TO_AST')
+        edges = self.get_in_edges(ast_node, edge_type="OBJ_TO_AST")
         for edge in edges:
             # avoid function run objects
-            if (self.get_node_attr(edge[0]).get('type') == 'function' or
-                    self.get_node_attr(edge[0]).get('code') == wildcard): # converted func
+            if (
+                self.get_node_attr(edge[0]).get("type") == "function"
+                or self.get_node_attr(edge[0]).get("code") == wildcard
+            ):  # converted func
                 objs.append(edge[0])
         if scope is not None:
             # for obj in objs:
@@ -1477,78 +1718,90 @@ class Graph:
                     for e in self.get_in_edges(h):
                         if e[0] == scope:
                             return True
-                        elif self.get_node_attr(e[0]).get('labels:label') in ['Scope', 'Name']:
+                        elif self.get_node_attr(e[0]).get("labels:label") in [
+                            "Scope",
+                            "Name",
+                        ]:
                             q.append(e[0])
                 return False
+
             # objs = list(filter(lambda obj: self.has_path(scope, obj), objs))
             objs = list(filter(_filter_obj, objs))
             if len(objs) > 1:
-                self.logger.warning('Function {} is declared as multiple objects in scope {}'
-                    .format(ast_node, scope))
-        self.timing('get_func_decl_objs_by_ast_node', time.time() - start)
+                self.logger.warning(
+                    "Function {} is declared as multiple objects in scope {}".format(
+                        ast_node, scope
+                    )
+                )
+        self.timing("get_func_decl_objs_by_ast_node", time.time() - start)
         return objs
 
     def get_func_scopes_by_obj_node(self, obj_node):
         if obj_node == None:
             return None
-        scope_edges = self.get_out_edges(obj_node, edge_type = "OBJ_TO_SCOPE")
+        scope_edges = self.get_out_edges(obj_node, edge_type="OBJ_TO_SCOPE")
         return [edge[1] for edge in scope_edges]
 
-    def add_blank_func_to_scope(self, func_name, scope=None, python_func:Callable=None):
-        '''
+    def add_blank_func_to_scope(
+        self, func_name, scope=None, python_func: Callable = None
+    ):
+        """
         Add a blank function with object graph nodes to a scope.
-        
+
         Args:
             func_name (str): function's name.
             scope (optional): where to add the function. Defaults to
                 None, referring to the current scope.
             python_func (optional): a special Python function in lieu of
                 the blank JS AST function. Defaults to None.
-        '''
+        """
         func_obj = self.add_blank_func_with_og_nodes(func_name)
         self.add_obj_to_name(func_name, scope=scope, tobe_added_obj=func_obj)
         if python_func is not None:
-            self.set_node_attr(func_obj, ('pythonfunc', python_func))
+            self.set_node_attr(func_obj, ("pythonfunc", python_func))
         return func_obj
 
-    def add_blank_func_as_prop(self, func_name, parent_obj=None, python_func:Callable=None):
-        '''
+    def add_blank_func_as_prop(
+        self, func_name, parent_obj=None, python_func: Callable = None
+    ):
+        """
         Add a blank function with object graph nodes as a property of
         another object.
-        
+
         Args:
             func_name (str): function's name.
             parent_obj (optional): function's parent object. Defaults to
                 None, referring to the current object.
             python_func (optional): a special Python function in lieu of
                 the blank JS AST function. Defaults to None.
-        '''
+        """
         func_obj = self.add_blank_func_with_og_nodes(func_name)
-        self.add_obj_as_prop(func_name, parent_obj=parent_obj,
-                             tobe_added_obj=func_obj)
+        self.add_obj_as_prop(func_name, parent_obj=parent_obj, tobe_added_obj=func_obj)
         if python_func is not None:
-            self.set_node_attr(func_obj, ('pythonfunc', python_func))
+            self.set_node_attr(func_obj, ("pythonfunc", python_func))
         return func_obj
 
     def convert_obj_node_type_to_function(self, obj, func_ast=None):
-        '''
+        """
         Convert an object node of any type to function.
         Function's prototype will also be added.
 
         Args:
             obj: The object node.
             func_ast (optional): Function's AST node. Default to None.
-        '''
+        """
         assert obj != self.undefined_obj
         assert obj != self.null_obj
-        if self.get_node_attr(obj).get('code') != wildcard:
-            self.set_node_attr(obj, ('type', 'function'))
-        self.add_obj_as_prop("prototype", func_ast, "object", 
-                parent_obj=obj)
+        if self.get_node_attr(obj).get("code") != wildcard:
+            self.set_node_attr(obj, ("type", "function"))
+        self.add_obj_as_prop("prototype", func_ast, "object", parent_obj=obj)
         if self.function_prototype is not None:
             # prevent setting __proto__ before setup_object_and_function runs
-            self.add_obj_as_prop(prop_name="__proto__", parent_obj=obj,
-            tobe_added_obj=self.function_prototype)
+            self.add_obj_as_prop(
+                prop_name="__proto__",
+                parent_obj=obj,
+                tobe_added_obj=self.function_prototype,
+            )
 
         """
         # for existing variable we do not need to remove obj to ast
@@ -1562,28 +1815,31 @@ class Graph:
         if func_ast is not None:
             self.add_edge(obj, func_ast, {"type:TYPE": "OBJ_TO_AST"})
 
-    def add_blank_func_with_og_nodes(self, func_name, func_obj=None,
-        python_func=None):
-        '''
+    def add_blank_func_with_og_nodes(self, func_name, func_obj=None, python_func=None):
+        """
         Add a blank function with object graph nodes (name node, function
         scope, and function declaration object node).
-        
+
         Args:
             func_name (str): Function's name.
             func_obj (optional): Function's object node if known. Use it
                 when you want to overwrite an existing object node.
                 Default to None.
-        '''
+        """
         ast_node = self.add_blank_func(func_name)
         if func_obj is None:
             func_obj = self.add_obj_node(ast_node, "function")
-            self.set_node_attr(func_obj, ('name', func_name))
+            self.set_node_attr(func_obj, ("name", func_name))
         else:
             self.convert_obj_node_type_to_function(func_obj, ast_node)
         if python_func is not None:
-            self.set_node_attr(func_obj, ('pythonfunc', python_func))
-        self.logger.debug(sty.fg(179) + "Dummy function"
-            + sty.rs.all + " {} assigned to obj {}".format(ast_node, func_obj))
+            self.set_node_attr(func_obj, ("pythonfunc", python_func))
+        self.logger.debug(
+            sty.fg(179)
+            + "Dummy function"
+            + sty.rs.all
+            + " {} assigned to obj {}".format(ast_node, func_obj)
+        )
         return func_obj
 
     def add_blank_func(self, func_name):
@@ -1594,73 +1850,78 @@ class Graph:
         """
         # add a function decl node first
         func_ast = self._get_new_nodeid()
-        self.logger.debug(sty.ef.inverse + sty.fg(179) + "Add dummy function"
-            + sty.rs.all + " name: {}".format(func_name)
-            + ", AST node: {}".format(func_ast))
+        self.logger.debug(
+            sty.ef.inverse
+            + sty.fg(179)
+            + "Add dummy function"
+            + sty.rs.all
+            + " name: {}".format(func_name)
+            + ", AST node: {}".format(func_ast)
+        )
         self.add_node(func_ast)
         # self.set_node_attr(func_ast, ('funcid', func_ast))
-        self.set_node_attr(func_ast, ('type', "AST_CLOSURE"))
-        self.set_node_attr(func_ast, ('labels:label', 'Artificial_AST'))
+        self.set_node_attr(func_ast, ("type", "AST_CLOSURE"))
+        self.set_node_attr(func_ast, ("labels:label", "Artificial_AST"))
 
         # add a node as the name of the function
         name_id = self._get_new_nodeid()
         self.add_node(name_id)
-        self.set_node_attr(name_id, ('type', 'string'))
-        self.set_node_attr(name_id, ('name', func_name))
-        self.set_node_attr(name_id, ('labels:label', 'Artificial_AST'))
-        self.set_node_attr(name_id, ('childnum:int', 0))
+        self.set_node_attr(name_id, ("type", "string"))
+        self.set_node_attr(name_id, ("name", func_name))
+        self.set_node_attr(name_id, ("labels:label", "Artificial_AST"))
+        self.set_node_attr(name_id, ("childnum:int", 0))
 
         entry_id = self._get_new_nodeid()
         self.add_node(entry_id)
-        self.set_node_attr(entry_id, ('funcid:int', func_ast))
-        self.set_node_attr(entry_id, ('type', 'CFG_FUNC_ENTRY'))
-        self.set_node_attr(entry_id, ('labels:label', 'Artificial'))
+        self.set_node_attr(entry_id, ("funcid:int", func_ast))
+        self.set_node_attr(entry_id, ("type", "CFG_FUNC_ENTRY"))
+        self.set_node_attr(entry_id, ("labels:label", "Artificial"))
 
         exit_id = self._get_new_nodeid()
         self.add_node(exit_id)
-        self.set_node_attr(exit_id, ('funcid:int', func_ast))
-        self.set_node_attr(exit_id, ('type', 'CFG_FUNC_EXIT'))
-        self.set_node_attr(exit_id, ('labels:label', 'Artificial'))
+        self.set_node_attr(exit_id, ("funcid:int", func_ast))
+        self.set_node_attr(exit_id, ("type", "CFG_FUNC_EXIT"))
+        self.set_node_attr(exit_id, ("labels:label", "Artificial"))
 
         null_id = self._get_new_nodeid()
         self.add_node(null_id)
-        self.set_node_attr(null_id, ('funcid:int', func_ast))
-        self.set_node_attr(null_id, ('type', 'NULL'))
-        self.set_node_attr(null_id, ('labels:label', 'Artificial_AST'))
-        self.set_node_attr(null_id, ('childnum:int', 1))
+        self.set_node_attr(null_id, ("funcid:int", func_ast))
+        self.set_node_attr(null_id, ("type", "NULL"))
+        self.set_node_attr(null_id, ("labels:label", "Artificial_AST"))
+        self.set_node_attr(null_id, ("childnum:int", 1))
 
         params_id = self._get_new_nodeid()
         self.add_node(params_id)
-        self.set_node_attr(params_id, ('funcid:int', func_ast))
-        self.set_node_attr(params_id, ('type', 'AST_PARAM_LIST'))
-        self.set_node_attr(params_id, ('labels:label', 'Artificial_AST'))
-        self.set_node_attr(params_id, ('childnum:int', 2))
+        self.set_node_attr(params_id, ("funcid:int", func_ast))
+        self.set_node_attr(params_id, ("type", "AST_PARAM_LIST"))
+        self.set_node_attr(params_id, ("labels:label", "Artificial_AST"))
+        self.set_node_attr(params_id, ("childnum:int", 2))
 
         body_id = self._get_new_nodeid()
         self.add_node(body_id)
-        self.set_node_attr(body_id, ('funcid:int', func_ast))
-        self.set_node_attr(body_id, ('type', 'AST_STMT_LIST'))
-        self.set_node_attr(body_id, ('labels:label', 'Artificial_AST'))
-        self.set_node_attr(body_id, ('childnum:int', 3))
+        self.set_node_attr(body_id, ("funcid:int", func_ast))
+        self.set_node_attr(body_id, ("type", "AST_STMT_LIST"))
+        self.set_node_attr(body_id, ("labels:label", "Artificial_AST"))
+        self.set_node_attr(body_id, ("childnum:int", 3))
 
         dummy_stmt_id = self._get_new_nodeid()
         self.add_node(dummy_stmt_id)
-        self.set_node_attr(dummy_stmt_id, ('funcid:int', func_ast))
-        self.set_node_attr(dummy_stmt_id, ('type', 'DUMMY_STMT'))
-        self.set_node_attr(dummy_stmt_id, ('labels:label', 'Artificial_AST'))
-        self.set_node_attr(dummy_stmt_id, ('childnum:int', 0))
+        self.set_node_attr(dummy_stmt_id, ("funcid:int", func_ast))
+        self.set_node_attr(dummy_stmt_id, ("type", "DUMMY_STMT"))
+        self.set_node_attr(dummy_stmt_id, ("labels:label", "Artificial_AST"))
+        self.set_node_attr(dummy_stmt_id, ("childnum:int", 0))
 
         # add edges
-        self.add_edge(func_ast, entry_id, {'type:TYPE': "ENTRY"})
-        self.add_edge(func_ast, exit_id, {'type:TYPE': "EXIT"})
-        self.add_edge(func_ast, name_id, {'type:TYPE': "PARENT_OF"})
-        self.add_edge(func_ast, null_id, {'type:TYPE': "PARENT_OF"})
-        self.add_edge(func_ast, params_id, {'type:TYPE': "PARENT_OF"})
-        self.add_edge(func_ast, body_id, {'type:TYPE': "PARENT_OF"})
-        self.add_edge(body_id, dummy_stmt_id, {'type:TYPE': "PARENT_OF"})
-        self.add_edge(entry_id, exit_id, {'type:TYPE': "FLOWS_TO"})
+        self.add_edge(func_ast, entry_id, {"type:TYPE": "ENTRY"})
+        self.add_edge(func_ast, exit_id, {"type:TYPE": "EXIT"})
+        self.add_edge(func_ast, name_id, {"type:TYPE": "PARENT_OF"})
+        self.add_edge(func_ast, null_id, {"type:TYPE": "PARENT_OF"})
+        self.add_edge(func_ast, params_id, {"type:TYPE": "PARENT_OF"})
+        self.add_edge(func_ast, body_id, {"type:TYPE": "PARENT_OF"})
+        self.add_edge(body_id, dummy_stmt_id, {"type:TYPE": "PARENT_OF"})
+        self.add_edge(entry_id, exit_id, {"type:TYPE": "FLOWS_TO"})
 
-        # we need to run the function 
+        # we need to run the function
         return func_ast
 
     def get_self_invoke_node_by_caller(self, caller_id):
@@ -1668,22 +1929,22 @@ class Graph:
         Deprecated
 
         get the closure of self invoke function by the caller id
-        
+
         Args:
             caller_id: the node id of the caller
         """
-        return self._get_childern_by_childnum(caller_id)['0']
+        return self._get_childern_by_childnum(caller_id)["0"]
 
     def get_cur_file_path(self, cur_scope=None):
-        file_scope = self.find_ancestor_scope(cur_scope=cur_scope,
-            scope_types=['FILE_SCOPE'])
+        file_scope = self.find_ancestor_scope(
+            cur_scope=cur_scope, scope_types=["FILE_SCOPE"]
+        )
         if file_scope is None:
             return None
-        file_ast = self.get_out_edges(file_scope,
-                        edge_type='SCOPE_TO_AST')[0][1]
+        file_ast = self.get_out_edges(file_scope, edge_type="SCOPE_TO_AST")[0][1]
         if file_ast is None:
             return None
-        return self.get_node_attr(file_ast).get('name')
+        return self.get_node_attr(file_ast).get("name")
 
     # prototype
 
@@ -1694,27 +1955,26 @@ class Graph:
 
         Args:
             obj_node: the child obj node
-            relation: obj_node -OBJ_DECL-> AST_FUNC_DECL -OBJ_TO_AST-> 
+            relation: obj_node -OBJ_DECL-> AST_FUNC_DECL -OBJ_TO_AST->
             FUNC_DECL -OBJ_TO_PROP-> prototype -NAME_TO_OBJ-> PROTOTYPE
         """
-        ast_upper_func_node = self.get_child_nodes(obj_node, 
-                edge_type = "OBJ_DECL")[0]
-        edges = self.get_in_edges(ast_upper_func_node,
-                edge_type = "OBJ_TO_AST")
+        ast_upper_func_node = self.get_child_nodes(obj_node, edge_type="OBJ_DECL")[0]
+        edges = self.get_in_edges(ast_upper_func_node, edge_type="OBJ_TO_AST")
         func_decl_obj_node = None
         for edge in edges:
-            if self.get_node_attr(edge[0])['type'] == "function":
+            if self.get_node_attr(edge[0])["type"] == "function":
                 func_decl_obj_node = edge[0]
                 break
-        if func_decl_obj_node is None: # TODO: what is cause of this bug?
-            self.logger.error('Cannot find function object node!')
+        if func_decl_obj_node is None:  # TODO: what is cause of this bug?
+            self.logger.error("Cannot find function object node!")
             return []
         else:
             prototype_obj_nodes = self.get_prop_obj_nodes(
-                parent_obj=func_decl_obj_node, prop_name='prototype')
-            self.logger.debug(f'prototype obj node is {prototype_obj_nodes}')
+                parent_obj=func_decl_obj_node, prop_name="prototype"
+            )
+            self.logger.debug(f"prototype obj node is {prototype_obj_nodes}")
             return prototype_obj_nodes
-    
+
     def build_proto(self, obj_node):
         """
         build the proto strcture of a object node
@@ -1724,8 +1984,7 @@ class Graph:
         """
         upper_level_prototype_objs = self._get_upper_level_prototype(obj_node)
         for obj in upper_level_prototype_objs:
-            self.add_obj_as_prop('__proto__', parent_obj=obj_node,
-                                 tobe_added_obj=obj)
+            self.add_obj_as_prop("__proto__", parent_obj=obj_node, tobe_added_obj=obj)
 
     # Misc
 
@@ -1734,22 +1993,26 @@ class Graph:
         the init function of setup a run
         """
         # base scope is not related to any file
-        self.BASE_SCOPE = self.add_scope("BASE_SCOPE", scope_name='Base')
+        self.BASE_SCOPE = self.add_scope("BASE_SCOPE", scope_name="Base")
 
-        self.BASE_OBJ = self.add_obj_to_scope(name='global',
-                            scope=self.BASE_SCOPE, combined=False)
+        self.BASE_OBJ = self.add_obj_to_scope(
+            name="global", scope=self.BASE_SCOPE, combined=False
+        )
         self.cur_objs = [self.BASE_OBJ]
 
         # setup JavaScript built-in values
-        self.null_obj = self.add_obj_to_scope(name='null', value='null',
-                                              scope=self.BASE_SCOPE)
+        self.null_obj = self.add_obj_to_scope(
+            name="null", value="null", scope=self.BASE_SCOPE
+        )
 
-        self.true_obj = self.add_obj_node(None, 'boolean', 'true')
-        self.add_obj_to_name('true', scope=self.BASE_SCOPE,
-                             tobe_added_obj=self.true_obj)
-        self.false_obj = self.add_obj_node(None, 'boolean', 'false')
-        self.add_obj_to_name('false', scope=self.BASE_SCOPE,
-                             tobe_added_obj=self.false_obj)
+        self.true_obj = self.add_obj_node(None, "boolean", "true")
+        self.add_obj_to_name(
+            "true", scope=self.BASE_SCOPE, tobe_added_obj=self.true_obj
+        )
+        self.false_obj = self.add_obj_node(None, "boolean", "false")
+        self.add_obj_to_name(
+            "false", scope=self.BASE_SCOPE, tobe_added_obj=self.false_obj
+        )
 
     def setup2(self):
         # self.tainted_user_input = self.add_obj_to_scope(
@@ -1759,50 +2022,60 @@ class Graph:
         # self.set_node_attr(self.tainted_user_input, ('tainted', True))
 
         # setup JavaScript built-in values
-        self.undefined_obj = self.add_obj_node(None, 'undefined',
-                                                value='undefined')
-        self.add_obj_to_name('undefined', scope=self.BASE_SCOPE,
-                             tobe_added_obj=self.undefined_obj)
-        self.infinity_obj = self.add_obj_node(None, 'number', 'Infinity')
-        self.add_obj_to_name('Infinity', scope=self.BASE_SCOPE,
-                             tobe_added_obj=self.infinity_obj)
-        self.negative_infinity_obj = self.add_obj_node(None, 'number',
-                                                       '-Infinity')
-        self.nan_obj = self.add_obj_node(None, 'number', float('nan'))
-        self.add_obj_to_name('NaN', scope=self.BASE_SCOPE,
-                             tobe_added_obj=self.nan_obj)
+        self.undefined_obj = self.add_obj_node(None, "undefined", value="undefined")
+        self.add_obj_to_name(
+            "undefined", scope=self.BASE_SCOPE, tobe_added_obj=self.undefined_obj
+        )
+        self.infinity_obj = self.add_obj_node(None, "number", "Infinity")
+        self.add_obj_to_name(
+            "Infinity", scope=self.BASE_SCOPE, tobe_added_obj=self.infinity_obj
+        )
+        self.negative_infinity_obj = self.add_obj_node(None, "number", "-Infinity")
+        self.nan_obj = self.add_obj_node(None, "number", float("nan"))
+        self.add_obj_to_name("NaN", scope=self.BASE_SCOPE, tobe_added_obj=self.nan_obj)
 
-        self.add_obj_as_prop(prop_name='__proto__', js_type='object',
-            parent_obj=self.BASE_OBJ)
+        self.add_obj_as_prop(
+            prop_name="__proto__", js_type="object", parent_obj=self.BASE_OBJ
+        )
 
         self.internal_objs = {
-            'undefined': self.undefined_obj,
-            'null': self.null_obj,
-            'global': self.BASE_OBJ,
-            'infinity': self.infinity_obj,
-            '-infinity': self.negative_infinity_obj,
-            'NaN': self.nan_obj,
-            'true': self.true_obj,
-            'false': self.false_obj
+            "undefined": self.undefined_obj,
+            "null": self.null_obj,
+            "global": self.BASE_OBJ,
+            "infinity": self.infinity_obj,
+            "-infinity": self.negative_infinity_obj,
+            "NaN": self.nan_obj,
+            "true": self.true_obj,
+            "false": self.false_obj,
         }
         self.inv_internal_objs = {v: k for k, v in self.internal_objs.items()}
-        self.logger.debug(sty.ef.inverse + 'Internal objects\n' + 
-            str(self.internal_objs)[1:-1] + sty.rs.all)
+        self.logger.debug(
+            sty.ef.inverse
+            + "Internal objects\n"
+            + str(self.internal_objs)[1:-1]
+            + sty.rs.all
+        )
 
         self.builtin_prototypes = [
-            self.object_prototype, self.string_prototype,
-            self.array_prototype, self.function_prototype,
-            self.number_prototype, self.boolean_prototype,
-            self.regexp_prototype, self.promise_prototype
+            self.object_prototype,
+            self.string_prototype,
+            self.array_prototype,
+            self.function_prototype,
+            self.number_prototype,
+            self.boolean_prototype,
+            self.regexp_prototype,
+            self.promise_prototype,
         ]
-        self.pollutable_objs = set(chain(*
-            [self.get_prop_obj_nodes(p) for p in self.builtin_prototypes]))
-        self.pollutable_name_nodes = set(chain(*
-            [self.get_prop_name_nodes(p) for p in self.builtin_prototypes]))
+        self.pollutable_objs = set(
+            chain(*[self.get_prop_obj_nodes(p) for p in self.builtin_prototypes])
+        )
+        self.pollutable_name_nodes = set(
+            chain(*[self.get_prop_name_nodes(p) for p in self.builtin_prototypes])
+        )
 
     def get_parent_object_def(self, node_id):
         """
-        get the obj number and defination of the parent object 
+        get the obj number and defination of the parent object
 
         Args:
             node_id: current node id, means the child id
@@ -1819,7 +2092,9 @@ class Graph:
 
             parent_obj_edges = self.get_in_edges(name_node, edge_type="OBJ_TO_PROP")
             for parent_obj_edge in parent_obj_edges:
-                def_edges = self.get_out_edges(parent_obj_edge[0], edge_type="OBJ_TO_AST")
+                def_edges = self.get_out_edges(
+                    parent_obj_edge[0], edge_type="OBJ_TO_AST"
+                )
                 if len(def_edges) == 0:
                     continue
 
@@ -1835,33 +2110,27 @@ class Graph:
         if py_obj is None:
             return self.null_obj
         elif type(py_obj) in [int, float]:
-            return self.add_obj_node(ast_node=ast_node, js_type='number',
-                value=py_obj)
+            return self.add_obj_node(ast_node=ast_node, js_type="number", value=py_obj)
         elif type(py_obj) is str:
-            return self.add_obj_node(ast_node=ast_node, js_type='string',
-                value=py_obj)
+            return self.add_obj_node(ast_node=ast_node, js_type="string", value=py_obj)
         elif type(py_obj) is list:
-            obj = self.add_obj_node(ast_node=ast_node, js_type='array',
-                value=py_obj)
+            obj = self.add_obj_node(ast_node=ast_node, js_type="array", value=py_obj)
             for i, u in enumerate(py_obj):
                 member = self.generate_obj_graph_for_python_obj(u)
-                self.add_obj_as_prop(prop_name=i, tobe_added_obj=member,
-                    parent_obj=obj)
+                self.add_obj_as_prop(prop_name=i, tobe_added_obj=member, parent_obj=obj)
             return obj
         elif type(py_obj) is dict:
-            obj = self.add_obj_node(ast_node=ast_node, js_type='object',
-                value=py_obj)
+            obj = self.add_obj_node(ast_node=ast_node, js_type="object", value=py_obj)
             for k, v in py_obj.items():
                 member = self.generate_obj_graph_for_python_obj(v)
-                self.add_obj_as_prop(prop_name=k, tobe_added_obj=member,
-                    parent_obj=obj)
+                self.add_obj_as_prop(prop_name=k, tobe_added_obj=member, parent_obj=obj)
             return obj
 
     def add_entry_node(self, parent=None, type="block"):
         entry_node = str(self._get_new_nodeid())
         self.add_node(entry_node)
-        self.set_node_attr(entry_node, ('labels:label', 'Artificial'))
-        self.set_node_attr(entry_node, ('type', f'CFG_{str(type).upper()}_ENTRY'))
+        self.set_node_attr(entry_node, ("labels:label", "Artificial"))
+        self.set_node_attr(entry_node, ("type", f"CFG_{str(type).upper()}_ENTRY"))
         if parent is not None:
             self.add_edge(parent, entry_node, {"type:TYPE": "ENTRY"})
         return entry_node
@@ -1869,15 +2138,17 @@ class Graph:
     def add_exit_node(self, parent=None, type="block"):
         exit_node = str(self._get_new_nodeid())
         self.add_node(exit_node)
-        self.set_node_attr(exit_node, ('labels:label', 'Artificial'))
-        self.set_node_attr(exit_node, ('type', f'CFG_{str(type).upper()}_EXIT'))
+        self.set_node_attr(exit_node, ("labels:label", "Artificial"))
+        self.set_node_attr(exit_node, ("type", f"CFG_{str(type).upper()}_EXIT"))
         if parent is not None:
             self.add_edge(parent, exit_node, {"type:TYPE": "EXIT"})
         return exit_node
 
     # Analysis
 
-    def _dfs_upper_by_edge_type(self, source=None, edge_type='OBJ_REACHES', depth_limit=None, sinks=[]):
+    def _dfs_upper_by_edge_type(
+        self, source=None, edge_type="OBJ_REACHES", depth_limit=None, sinks=[]
+    ):
         """
         dfs a specific type of edge upper from a node id
 
@@ -1886,7 +2157,7 @@ class Graph:
             edge_types: we only consider some types of edge types
         Return:
             nodes: list, nodes on the pathes
-            objs: dict, the objs on the edge, {str(from_to): [obj numbers]} 
+            objs: dict, the objs on the edge, {str(from_to): [obj numbers]}
         """
         start_time = time.time()
         G = self.graph
@@ -1912,7 +2183,7 @@ class Graph:
         nodes_group = set([edge[0] for edge in edge_group])
         if len(nodes_group) == 0:
             # we only have 1 start node, just return this node
-            self.graph = backup_graph 
+            self.graph = backup_graph
             return [[start]]
 
         stack = [(start, depth_limit, iter(nodes_group))]
@@ -1952,21 +2223,21 @@ class Graph:
 
         self.graph = backup_graph
         return pathes
-        self.timing('_dfs_upper_by_edge_type', time.time() - start_time)
+        self.timing("_dfs_upper_by_edge_type", time.time() - start_time)
         return pathes
 
     def get_node_file_path(self, node_id):
         # it's a ast so a node only has one parent
         while True:
             node_attrs = self.get_node_attr(node_id)
-            if node_attrs.get('flags:string[]') == 'TOPLEVEL_FILE':
-                return node_attrs.get('name')
+            if node_attrs.get("flags:string[]") == "TOPLEVEL_FILE":
+                return node_attrs.get("name")
             in_edges = self.get_in_edges(node_id, edge_type="PARENT_OF")
             if in_edges:
                 node_id = in_edges[0][0]
             else:
                 # should be built in
-                return None 
+                return None
 
     def get_node_line_code(self, node_id):
         """
@@ -1974,7 +2245,7 @@ class Graph:
         """
         node_attr = self.get_node_attr(node_id)
         if "lineno:int" in node_attr:
-            lineno = node_attr['lineno:int']
+            lineno = node_attr["lineno:int"]
         else:
             lineno = None
         if lineno is not None:
@@ -1988,12 +2259,12 @@ class Graph:
         return the dict with numbers and contents
         """
         file_name = self.get_node_file_path(node_id)
-        if file_name is None or file_name == 'stdin':
+        if file_name is None or file_name == "stdin":
             return None
         if file_name not in self.file_contents:
-            content_dict = ['']
+            content_dict = [""]
             try:
-                with open(file_name, 'r') as fp:
+                with open(file_name, "r") as fp:
                     for file_line in fp:
                         content_dict.append(file_line)
             except FileNotFoundError:
@@ -2003,14 +2274,16 @@ class Graph:
 
     def get_node_file_content_highlighted(self, node_id):
         highlighted_obj_nodes = set()
+
         def dfs(now):
             nonlocal self, highlighted_obj_nodes
             if now in highlighted_obj_nodes:
                 return
-            if self.get_node_attr(now).get('tainted'):
+            if self.get_node_attr(now).get("tainted"):
                 highlighted_obj_nodes.add(now)
-            for child in self.get_child_nodes(now, edge_type='CONTRIBUTES_TO'):
+            for child in self.get_child_nodes(now, edge_type="CONTRIBUTES_TO"):
                 dfs(child)
+
         for obj_node in self.highlighted_obj_nodes:
             dfs(obj_node)
         content = [str(l) for l in self.get_node_file_content(node_id)]
@@ -2035,7 +2308,7 @@ class Graph:
                 #     matched = False
                 #     for l in range(start, end):
                 #         try:
-                #             new, c = re.subn(r'\b' + code + r'\b', 
+                #             new, c = re.subn(r'\b' + code + r'\b',
                 #                 sty.fg.li_red + code + sty.rs.all, content[l])
                 #             if c > 0:
                 #                 matched = True
@@ -2043,17 +2316,16 @@ class Graph:
                 #         except IndexError:
                 #             pass
                 # except (ValueError, TypeError) as e:
-                #     print(e)                    
+                #     print(e)
                 #     # pass
 
                 # print(file_name, self.get_node_file_path(ast_node))
                 if file_name != self.get_node_file_path(ast_node):
                     continue
-                location = self.get_node_attr(ast_node).get(
-                                                    'namespace', '').strip()
+                location = self.get_node_attr(ast_node).get("namespace", "").strip()
                 # print(ast_node, self.get_node_attr(ast_node), 'location:', location)
                 if location:
-                    sl, sc, el, ec = location.split(':')
+                    sl, sc, el, ec = location.split(":")
                     # print(sl, sc, el, ec)
                     if not el:
                         el = sl
@@ -2073,14 +2345,27 @@ class Graph:
                                 line = content[l]
                                 # print(f'line {l}: {content[l]}')
                                 if l == sl and l == el:
-                                    line = line[0:sc] + sty.fg.li_red + line[
-                                            sc:ec] + sty.rs.all + line[ec:]
+                                    line = (
+                                        line[0:sc]
+                                        + sty.fg.li_red
+                                        + line[sc:ec]
+                                        + sty.rs.all
+                                        + line[ec:]
+                                    )
                                 elif l == sl and l != el:
-                                    line = line[0:sc] + sty.fg.li_red + \
-                                        line[sc:] + sty.rs.all
+                                    line = (
+                                        line[0:sc]
+                                        + sty.fg.li_red
+                                        + line[sc:]
+                                        + sty.rs.all
+                                    )
                                 elif l != sl and l == el:
-                                    line = sty.fg.li_red + line[0:ec] + \
-                                        sty.rs.all + content[l][ec:]
+                                    line = (
+                                        sty.fg.li_red
+                                        + line[0:ec]
+                                        + sty.rs.all
+                                        + content[l][ec:]
+                                    )
                                 else:
                                     line = sty.fg.li_red + line + sty.rs.all
                                 # print(f'line {l}: {line}')
@@ -2088,7 +2373,7 @@ class Graph:
                             except IndexError:
                                 pass
                     except (ValueError, TypeError) as e:
-                        print(e)    
+                        print(e)
                         # pass
         return content
 
@@ -2096,10 +2381,10 @@ class Graph:
         content = self.get_node_file_content(ast_node)
         if content is None:
             return None
-        location = self.get_node_attr(ast_node).get('namespace', '').strip()
+        location = self.get_node_attr(ast_node).get("namespace", "").strip()
         output = str()
         if location:
-            sl, sc, el, ec = location.split(':')
+            sl, sc, el, ec = location.split(":")
             if not el:
                 el = sl
             try:
@@ -2141,9 +2426,9 @@ class Graph:
             True for exist or False for not exist
         """
         if len(func_names) == 0:
-            return True 
-        func_nodes = self.get_node_by_attr('type', 'AST_METHOD_CALL')
-        func_nodes += self.get_node_by_attr('type', 'AST_CALL')
+            return True
+        func_nodes = self.get_node_by_attr("type", "AST_METHOD_CALL")
+        func_nodes += self.get_node_by_attr("type", "AST_CALL")
         for func_node in func_nodes:
             func_name = self.get_name_from_child(func_node)
             if func_name in func_names:
@@ -2159,8 +2444,8 @@ class Graph:
 
         all_nodes = self.get_all_nodes()
         for n in all_nodes:
-            if 'type' in all_nodes[n]:
-                if 'AST_' in all_nodes[n]['type'] and self.is_statement(n):
+            if "type" in all_nodes[n]:
+                if "AST_" in all_nodes[n]["type"] and self.is_statement(n):
                     self.all_stat.add(n)
                     self.total_num_stat += 1
         # print(len(set(self.all_stat_list)), len(set(self.covered_list)), len(self.covered_list))
@@ -2175,10 +2460,12 @@ class Graph:
 
         all_nodes = self.get_all_nodes()
         for n in all_nodes:
-            if 'type' in all_nodes[n]:
-                if all_nodes[n]['type'] in ['AST_FUNC_DECL', 'AST_CLOSURE']:
-                    if 'labels:label' in all_nodes[n] and \
-                            all_nodes[n]['labels:label'] == 'Artificial_AST':
+            if "type" in all_nodes[n]:
+                if all_nodes[n]["type"] in ["AST_FUNC_DECL", "AST_CLOSURE"]:
+                    if (
+                        "labels:label" in all_nodes[n]
+                        and all_nodes[n]["labels:label"] == "Artificial_AST"
+                    ):
                         pass
                     else:
                         self.all_func.add(n)
@@ -2189,20 +2476,26 @@ class Graph:
         new_path = []
         for i in range(len(path) - 1):
             # print(f'path {i} is {path[i]}')
-            cur, next = path[i], path[i + 1] # for every pair of nodes in the DF path
+            cur, next = path[i], path[i + 1]  # for every pair of nodes in the DF path
             new_path.append(cur)
             # print('cur', cur, 'next', next)
             if cur == next:
                 new_path.append(next)
                 continue
-            included_objs = set() # only consider objs on the DF edges between this pair of nodes
-            for e in self.get_edges_between(cur, next, edge_type='OBJ_REACHES').values():
-                obj = e.get('obj')
+            included_objs = (
+                set()
+            )  # only consider objs on the DF edges between this pair of nodes
+            for e in self.get_edges_between(
+                cur, next, edge_type="OBJ_REACHES"
+            ).values():
+                obj = e.get("obj")
                 if obj is not None:
                     included_objs.add(obj)
             new_nodes = set()
             # search CF paths between the pair of nodes
-            for cf_path in self._dfs_upper_by_edge_type(source=next, edge_type='FLOWS_TO', sinks=[cur]):
+            for cf_path in self._dfs_upper_by_edge_type(
+                source=next, edge_type="FLOWS_TO", sinks=[cur]
+            ):
                 # this function is reverse search
                 for node in reversed(cf_path):
                     if node == cur:
@@ -2210,8 +2503,10 @@ class Graph:
                     # print('node is', node)
                     # if any of the objs are used in a statement in the CF path in between
                     # we check this by checking if there is a DF edge
-                    for e in self.get_edges_between(cur, node, edge_type='OBJ_REACHES').values():
-                        if e.get('obj') in included_objs:
+                    for e in self.get_edges_between(
+                        cur, node, edge_type="OBJ_REACHES"
+                    ).values():
+                        if e.get("obj") in included_objs:
                             new_nodes.add(node)
                             break
             new_nodes.remove(next)
@@ -2219,5 +2514,3 @@ class Graph:
             new_path.extend(new_nodes)
         new_path.append(path[-1])
         return new_path
-
-

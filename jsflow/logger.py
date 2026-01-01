@@ -1,12 +1,14 @@
 """
 This module is used to log the messages to the console or file.
 """
-import logging 
+
+import logging
 import re
 import sty
 import os
 
 ATTENTION = 15
+
 
 class ColorFormatter(logging.Formatter):
     def format(self, record):
@@ -19,21 +21,25 @@ class ColorFormatter(logging.Formatter):
             res = sty.fg.green + sty.ef.bold + res + sty.rs.all
         return res
 
+
 class NoColorFormatter(logging.Formatter):
     def format(self, record):
         res = super(NoColorFormatter, self).format(record)
-        res = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', res)
+        res = re.sub(r"\x1b\[[0-9;]*[a-zA-Z]", "", res)
         return res
 
-def create_logger(name, output_type="file", level=logging.DEBUG, file_name='run_log.log'):
+
+def create_logger(
+    name, output_type="file", level=logging.DEBUG, file_name="run_log.log"
+):
     """
     Create a logger with file or console output.
-    
+
     Creates a Python logging.Logger instance configured for either file
     or console output. File loggers use NoColorFormatter to remove ANSI
     escape codes, while console loggers use ColorFormatter for colored
     output on non-Windows systems.
-    
+
     Args:
         name (str): Name of the logger instance
         output_type (str, optional): Output destination. Options:
@@ -44,10 +50,10 @@ def create_logger(name, output_type="file", level=logging.DEBUG, file_name='run_
             Defaults to logging.DEBUG.
         file_name (str, optional): Path to log file when output_type is 'file'.
             Defaults to 'run_log.log'.
-    
+
     Returns:
         logging.Logger: Configured logger instance
-    
+
     Example:
         >>> from jsflow.logger import create_logger
         >>> logger = create_logger('my_logger', output_type='console')
@@ -61,7 +67,7 @@ def create_logger(name, output_type="file", level=logging.DEBUG, file_name='run_
         logger.removeHandler(handler)
 
     stream_handler = logging.StreamHandler()
-    if os.name == 'nt': # Windows
+    if os.name == "nt":  # Windows
         stream_handler.setFormatter(NoColorFormatter())
     else:
         stream_handler.setFormatter(ColorFormatter())

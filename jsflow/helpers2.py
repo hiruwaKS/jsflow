@@ -6,6 +6,7 @@ These routines complement opgen by interpreting JS conditions, converting
 between object nodes and literal values, and wiring CONTRIBUTES_TO edges to
 explain how data flows through expressions.
 """
+
 from .graph import Graph
 from .utilities import NodeHandleResult, ExtraInfo, get_random_hex
 from .utilities import ConditionTag
@@ -19,10 +20,11 @@ from collections import defaultdict
 # Logger will be properly initialized in launcher.py with correct log directory
 logger = create_logger("main_logger", output_type="console")
 
+
 def check_condition(G: Graph, ast_node, extra: ExtraInfo):
-    '''
+    """
     Check if a condition is true or false.
-    
+
     Args:
         G (Graph): Graph.
         ast_node: AST node of the condition expression.
@@ -33,48 +35,52 @@ def check_condition(G: Graph, ast_node, extra: ExtraInfo):
             condition is true. If both left side and right side are
             single possibility, it returns 0 for false, and 1 for true.
             A boolean value if all results are not deterministic.
-    '''
-    
-    node_type = G.get_node_attr(ast_node).get('type')
-    op_type = G.get_node_attr(ast_node).get('flags:string[]')
+    """
+
+    node_type = G.get_node_attr(ast_node).get("type")
+    op_type = G.get_node_attr(ast_node).get("flags:string[]")
     flag = True
     deter_flag = True
     extra = ExtraInfo(extra)
     condt = None
-    if node_type == 'AST_EXPR_LIST':
+    if node_type == "AST_EXPR_LIST":
         child = G.get_ordered_ast_child_nodes(ast_node)[0]
         return check_condition(G, child, extra)
-    elif node_type == 'AST_UNARY_OP' and op_type == 'UNARY_BOOL_NOT':
+    elif node_type == "AST_UNARY_OP" and op_type == "UNARY_BOOL_NOT":
         child = G.get_ordered_ast_child_nodes(ast_node)[0]
         p, d, t = check_condition(G, child, extra)
         if p is not None:
             return 1 - p, d, ConditionTag(ConditionTag.logical_not, t)
         else:
             return None, d, ConditionTag(ConditionTag.logical_not, t)
-    if node_type == 'AST_BINARY_OP':
+    if node_type == "AST_BINARY_OP":
         left, right = G.get_ordered_ast_child_nodes(ast_node)[:2]
-        if op_type == 'BINARY_BOOL_OR':
+        if op_type == "BINARY_BOOL_OR":
             lp, ld, lt = check_condition(G, left, extra)
             # print('binary bool or', lp, ld)
             rp, rd, rt = check_condition(G, right, extra)
             # print('binary bool or', lp, ld, rp, rd)
             if lp is not None and rp is not None:
-                return lp + rp - lp * rp, ld and rd, \
-                    ConditionTag(ConditionTag.logical_or, lt, rt)
+                return (
+                    lp + rp - lp * rp,
+                    ld and rd,
+                    ConditionTag(ConditionTag.logical_or, lt, rt),
+                )
             else:
-                return None, False, \
-                    ConditionTag(ConditionTag.logical_or, lt, rt)
-        elif op_type == 'BINARY_BOOL_AND':
+                return None, False, ConditionTag(ConditionTag.logical_or, lt, rt)
+        elif op_type == "BINARY_BOOL_AND":
             lp, ld, lt = check_condition(G, left, extra)
             # print('binary bool and', lp, ld)
             rp, rd, rt = check_condition(G, right, extra)
             # print('binary bool and', lp, ld, rp, rd)
             if lp is not None and rp is not None:
-                return lp * rp, ld and rd, \
-                    ConditionTag(ConditionTag.logical_and, lt, rt)
+                return (
+                    lp * rp,
+                    ld and rd,
+                    ConditionTag(ConditionTag.logical_and, lt, rt),
+                )
             else:
-                return None, False, \
-                    ConditionTag(ConditionTag.logical_and, lt, rt)
+                return None, False, ConditionTag(ConditionTag.logical_and, lt, rt)
         else:
             handled_left = opgen.handle_node(G, left, extra)
             handled_right = opgen.handle_node(G, right, extra)
@@ -84,7 +90,7 @@ def check_condition(G: Graph, ast_node, extra: ExtraInfo):
             right_values = to_values(G, handled_right, ast_node, for_prop=True)[0]
             # print(f'Comparing {handled_left.name}: {left_values} and '
             #     f'{handled_right.name}: {right_values}')
-            if op_type is not None: # tricky
+            if op_type is not None:  # tricky
                 internal_op_type = getattr(ConditionTag, op_type.lower(), None)
             else:
                 internal_op_type = None
@@ -92,9 +98,12 @@ def check_condition(G: Graph, ast_node, extra: ExtraInfo):
             true_num = 0
             total_num = len(left_values) * len(right_values)
             if total_num == 0:
-                return (None, False,  # Value is unknown, cannot check
-                    ConditionTag(internal_op_type, handled_left, handled_right))
-            if op_type == 'BINARY_IS_EQUAL':
+                return (
+                    None,
+                    False,  # Value is unknown, cannot check
+                    ConditionTag(internal_op_type, handled_left, handled_right),
+                )
+            if op_type == "BINARY_IS_EQUAL":
                 for v1 in left_values:
                     for v2 in right_values:
                         if (v1 != undefined) != (v2 != undefined):
@@ -106,7 +115,7 @@ def check_condition(G: Graph, ast_node, extra: ExtraInfo):
                         else:
                             true_num += 0.5
                             deter_flag = False
-            elif op_type == 'BINARY_IS_IDENTICAL':
+            elif op_type == "BINARY_IS_IDENTICAL":
                 for v1 in left_values:
                     for v2 in right_values:
                         if (v1 != undefined) != (v2 != undefined):
@@ -118,7 +127,7 @@ def check_condition(G: Graph, ast_node, extra: ExtraInfo):
                         else:
                             true_num += 0.5
                             deter_flag = False
-            elif op_type == 'BINARY_IS_NOT_EQUAL':
+            elif op_type == "BINARY_IS_NOT_EQUAL":
                 for v1 in left_values:
                     for v2 in right_values:
                         if (v1 != undefined) != (v2 != undefined):
@@ -130,7 +139,7 @@ def check_condition(G: Graph, ast_node, extra: ExtraInfo):
                         else:
                             true_num += 0.5
                             deter_flag = False
-            elif op_type == 'BINARY_IS_NOT_IDENTICAL':
+            elif op_type == "BINARY_IS_NOT_IDENTICAL":
                 for v1 in left_values:
                     for v2 in right_values:
                         if (v1 != undefined) != (v2 != undefined):
@@ -142,7 +151,7 @@ def check_condition(G: Graph, ast_node, extra: ExtraInfo):
                         else:
                             true_num += 0.5
                             deter_flag = False
-            elif op_type == 'BINARY_IS_SMALLER':
+            elif op_type == "BINARY_IS_SMALLER":
                 for v1 in left_values:
                     for v2 in right_values:
                         if (v1 != undefined) or (v2 != undefined):
@@ -154,7 +163,7 @@ def check_condition(G: Graph, ast_node, extra: ExtraInfo):
                         else:
                             true_num += 0.5
                             deter_flag = False
-            elif op_type == 'BINARY_IS_GREATER':
+            elif op_type == "BINARY_IS_GREATER":
                 for v1 in left_values:
                     for v2 in right_values:
                         if (v1 != undefined) or (v2 != undefined):
@@ -166,7 +175,7 @@ def check_condition(G: Graph, ast_node, extra: ExtraInfo):
                         else:
                             true_num += 0.5
                             deter_flag = False
-            elif op_type == 'BINARY_IS_SMALLER_OR_EQUAL':
+            elif op_type == "BINARY_IS_SMALLER_OR_EQUAL":
                 for v1 in left_values:
                     for v2 in right_values:
                         if (v1 != undefined) or (v2 != undefined):
@@ -178,7 +187,7 @@ def check_condition(G: Graph, ast_node, extra: ExtraInfo):
                         else:
                             true_num += 0.5
                             deter_flag = False
-            elif op_type == 'BINARY_IS_GREATER_OR_EQUAL':
+            elif op_type == "BINARY_IS_GREATER_OR_EQUAL":
                 for v1 in left_values:
                     for v2 in right_values:
                         if (v1 != undefined) or (v2 != undefined):
@@ -199,11 +208,15 @@ def check_condition(G: Graph, ast_node, extra: ExtraInfo):
         opgen.build_df_by_def_use(G, ast_node, handled.obj_nodes)
         internal_op_type = ConditionTag.exp_value
         true_num = 0
-        total_num = len(list(filter(lambda x: x != G.undefined_obj,
-                                handled.obj_nodes))) + len(handled.values)
+        total_num = len(
+            list(filter(lambda x: x != G.undefined_obj, handled.obj_nodes))
+        ) + len(handled.values)
         if total_num == 0:
-            return (None, False,  # Value is unknown, cannot check
-                ConditionTag(internal_op_type, handled))
+            return (
+                None,
+                False,  # Value is unknown, cannot check
+                ConditionTag(internal_op_type, handled),
+            )
         for value in handled.values:
             if value == wildcard:
                 true_num += 0.5
@@ -215,25 +228,29 @@ def check_condition(G: Graph, ast_node, extra: ExtraInfo):
         for obj in handled.obj_nodes:
             if obj in [G.undefined_obj, G.null_obj, G.false_obj]:
                 pass
-            elif obj in [G.infinity_obj, G.negative_infinity_obj, G.nan_obj,
-                G.true_obj]:
+            elif obj in [
+                G.infinity_obj,
+                G.negative_infinity_obj,
+                G.nan_obj,
+                G.true_obj,
+            ]:
                 true_num += 1
             else:
-                value = G.get_node_attr(obj).get('code')
-                typ = G.get_node_attr(obj).get('type')
-                if typ == 'number':
+                value = G.get_node_attr(obj).get("code")
+                typ = G.get_node_attr(obj).get("type")
+                if typ == "number":
                     if value == wildcard:
                         true_num += 0.5
                         deter_flag = False
                     elif val_to_float(value) != 0:
                         true_num += 1
-                elif typ == 'string':
+                elif typ == "string":
                     if value == wildcard:
                         true_num += 0.5
                         deter_flag = False
                     elif value:
                         true_num += 1
-                elif typ == 'function':
+                elif typ == "function":
                     # how should we determine when it's a function?
                     true_num += 0.5
                     deter_flag = False
@@ -247,12 +264,19 @@ def check_condition(G: Graph, ast_node, extra: ExtraInfo):
             if value:
                 true_num += 1
     if 0 == total_num:
-        logger.debug('Check condition {} result: N/A'.format(sty.ef.i +
-            G.get_node_attr(ast_node).get('code') + sty.rs.all))
+        logger.debug(
+            "Check condition {} result: N/A".format(
+                sty.ef.i + G.get_node_attr(ast_node).get("code") + sty.rs.all
+            )
+        )
         return None, False, None
-    logger.debug('Check condition {} result: p = {}, deterministic = {}'
-        .format(sty.ef.i + G.get_node_attr(ast_node).get('code') + sty.rs.all,
-        true_num / total_num, deter_flag))
+    logger.debug(
+        "Check condition {} result: p = {}, deterministic = {}".format(
+            sty.ef.i + G.get_node_attr(ast_node).get("code") + sty.rs.all,
+            true_num / total_num,
+            deter_flag,
+        )
+    )
     if internal_op_type == ConditionTag.exp_value:
         tag = ConditionTag(internal_op_type, handled)
     else:
@@ -262,9 +286,11 @@ def check_condition(G: Graph, ast_node, extra: ExtraInfo):
 
 def check_switch_var(G: Graph, ast_node, extra: ExtraInfo):
     left_values = to_values(G, extra.switch_var, ast_node, for_prop=True)[0]
-    right_values = to_values(G, opgen.handle_node(G, ast_node, extra), ast_node, for_prop=True)[0]
-    logger.debug(f'Switch variable values: {left_values}')
-    logger.debug(f'Case values: {right_values}')
+    right_values = to_values(
+        G, opgen.handle_node(G, ast_node, extra), ast_node, for_prop=True
+    )[0]
+    logger.debug(f"Switch variable values: {left_values}")
+    logger.debug(f"Case values: {right_values}")
 
     true_num = 0
     total_num = len(left_values) * len(right_values)
@@ -286,9 +312,16 @@ def check_switch_var(G: Graph, ast_node, extra: ExtraInfo):
         return true_num / total_num, deter_flag
 
 
-def add_contributes_to(G: Graph, sources, target, operation: str=None,
-    index: int=None, rnd: str=None, chain_tainted=True):
-    '''
+def add_contributes_to(
+    G: Graph,
+    sources,
+    target,
+    operation: str = None,
+    index: int = None,
+    rnd: str = None,
+    chain_tainted=True,
+):
+    """
     Add CONTRIBUTES_TO edges.
 
     Args:
@@ -302,46 +335,53 @@ def add_contributes_to(G: Graph, sources, target, operation: str=None,
             possibilities are not supported). Defaults to None.
         chain_tainted (bool, optional): Whether to chain tainted values.
             Defaults to True.
-    '''    
-    if G.first_pass: return
+    """
+    if G.first_pass:
+        return
     assert not isinstance(sources, (str, bytes))
     tainted = False
     random = get_random_hex()
     for i, source in enumerate(sources):
         _source = str(source)
-        if G.get_node_attr(source).get('tainted'):
-            _source += ' tainted'
-        source_name = ', '.join(G.reverse_names[source])
+        if G.get_node_attr(source).get("tainted"):
+            _source += " tainted"
+        source_name = ", ".join(G.reverse_names[source])
         if not source_name:
-            source_name = repr(G.get_node_attr(source).get('code'))
-        target_name = ', '.join(G.reverse_names[target])
+            source_name = repr(G.get_node_attr(source).get("code"))
+        target_name = ", ".join(G.reverse_names[target])
         if not target_name:
-            target_name = repr(G.get_node_attr(target).get('code'))
-        logger.debug(f'Object {_source}({source_name}) {sty.fg.li_magenta}'
-            f'CONTRIBUTES TO{sty.rs.all} {target}({target_name}) '
-            f'(Operation: {operation}, Index: {index or i}), tainted: {tainted}')
-        attr = {'type:TYPE': 'CONTRIBUTES_TO'}
+            target_name = repr(G.get_node_attr(target).get("code"))
+        logger.debug(
+            f"Object {_source}({source_name}) {sty.fg.li_magenta}"
+            f"CONTRIBUTES TO{sty.rs.all} {target}({target_name}) "
+            f"(Operation: {operation}, Index: {index or i}), tainted: {tainted}"
+        )
+        attr = {"type:TYPE": "CONTRIBUTES_TO"}
         if operation is not None:
             # 'opt' means operation tuple
             if index is not None:
                 if rnd is not None:
-                    attr['opt'] = (operation, rnd, index)
+                    attr["opt"] = (operation, rnd, index)
                 else:
-                    attr['opt'] = (operation, random, index)
+                    attr["opt"] = (operation, random, index)
             else:
-                attr['opt'] = (operation, random, i)
+                attr["opt"] = (operation, random, i)
         G.add_edge(source, target, attr)
-        tainted = tainted or G.get_node_attr(source).get('tainted', False)
+        tainted = tainted or G.get_node_attr(source).get("tainted", False)
     if chain_tainted and tainted:
-        G.set_node_attr(target, ('tainted', True))
+        G.set_node_attr(target, ("tainted", True))
 
 
-def to_obj_nodes(G: Graph, handle_result: NodeHandleResult, ast_node=None,
-    incl_existing_obj_nodes=True):
-    '''
+def to_obj_nodes(
+    G: Graph,
+    handle_result: NodeHandleResult,
+    ast_node=None,
+    incl_existing_obj_nodes=True,
+):
+    """
     Experimental. Converts 'values' field into object nodes.
     Returns converted object nodes as a list.
-    '''
+    """
     returned_objs = []
     # if ast_node is None:
     #     cpg_node = G.cur_stmt
@@ -350,12 +390,11 @@ def to_obj_nodes(G: Graph, handle_result: NodeHandleResult, ast_node=None,
     if handle_result.values:
         for i, value in enumerate(handle_result.values):
             if type(value) in [int, float]:
-                added_obj = G.add_obj_node(ast_node, 'number', value)
+                added_obj = G.add_obj_node(ast_node, "number", value)
             else:
-                added_obj = G.add_obj_node(ast_node, 'string', value)
+                added_obj = G.add_obj_node(ast_node, "string", value)
             if handle_result.value_tags:
-                G.set_node_attr(added_obj, 
-                    ('for_tags', handle_result.value_tags[i]))
+                G.set_node_attr(added_obj, ("for_tags", handle_result.value_tags[i]))
             returned_objs.append(added_obj)
             # add CONTRIBUTES_TO edges from sources to the added object
             if i < len(handle_result.value_sources):
@@ -368,12 +407,13 @@ def to_obj_nodes(G: Graph, handle_result: NodeHandleResult, ast_node=None,
     return returned_objs
 
 
-def to_values(G: Graph, handle_result: NodeHandleResult,
-    incl_existing_values=True, for_prop=False):
-    '''
+def to_values(
+    G: Graph, handle_result: NodeHandleResult, incl_existing_values=True, for_prop=False
+):
+    """
     Experimental. Get values ('code' fields) in object nodes.
     Returns values, sources and tags in lists.
-    '''
+    """
     values = []
     sources = []
     tags = []
@@ -392,22 +432,22 @@ def to_values(G: Graph, handle_result: NodeHandleResult,
     for obj in handle_result.obj_nodes:
         attrs = G.get_node_attr(obj)
         if for_prop:
-            if attrs.get('code') == wildcard:
+            if attrs.get("code") == wildcard:
                 value = wildcard
             elif obj == G.undefined_obj:
                 value = undefined
-            elif attrs.get('code') is not None:
-                value = val_to_str(attrs.get('code'))
+            elif attrs.get("code") is not None:
+                value = val_to_str(attrs.get("code"))
             else:
-                value = 'Obj#' + obj
+                value = "Obj#" + obj
         else:
-            if attrs.get('code') is not None:
-                value = attrs.get('code')
+            if attrs.get("code") is not None:
+                value = attrs.get("code")
             else:
                 value = wildcard
         values.append(value)
         sources.append([obj])
-        tags.append(G.get_node_attr(obj).get('for_tags', []))
+        tags.append(G.get_node_attr(obj).get("for_tags", []))
     # print(values, sources)
     if not G.two_pass or G.first_pass:
         values, sources = combine_values(values, sources)
@@ -422,21 +462,23 @@ def combine_values(values, sources, *arg):
 
 
 def peek_variables(G: Graph, ast_node, extra: ExtraInfo):
-    '''
+    """
     Experimental. Peek what variable is used in the statement and get
     their object nodes. Currently, you must ensure the statement you
     want tho peek is in the same scope as your current scope.
-    
+
     Args:
         G (Graph): Graph.
         ast_node: AST node of the statement.
         handling_func (Callable): Function to handle the variable node.
             Normally you should use handle_var.
         extra (ExtraInfo): Extra info.
-    '''
+    """
     returned_dict = {}
-    if G.get_node_attr(ast_node).get('type') == 'AST_VAR' or \
-        G.get_node_attr(ast_node).get('type') == 'AST_NAME':
+    if (
+        G.get_node_attr(ast_node).get("type") == "AST_VAR"
+        or G.get_node_attr(ast_node).get("type") == "AST_NAME"
+    ):
         handle_result = opgen.handle_node(G, ast_node, extra)
         if handle_result.name:
             returned_dict[handle_result.name] = handle_result.obj_nodes

@@ -3,47 +3,36 @@ This module is used to store the list of vulnerable function signatures.
 """
 
 signature_lists = {
-        'os_command': [
-            "sink_hqbpillvul_execFile",
-            'sink_hqbpillvul_exec',
-            'sink_hqbpillvul_execSync',
-            'sink_hqbpillvul_spawn',
-            'sink_hqbpillvul_spawnSync',
-            'sink_hqbpillvul_execa_shell',
-            'sink_hqbpillvul_shelljs_exec'
-            ],
-        'os_command_strict': [
-            'sink_hqbpillvul_exec',
-            'sink_hqbpillvul_execSync',
-            'sink_hqbpillvul_execa_shell',
-            'sink_hqbpillvul_shelljs_exec'
-            ],
-        'xss': [
-            'sink_hqbpillvul_http_write',
-            'sink_hqbpillvul_http_setHeader'
-            ],
-        'proto_pollution': [
-            'merge', 'extend', 'clone', 'parse'
-            ],
-        'code_exec': [
-            'Function',
-            'eval',
-            # "sink_hqbpillvul_execFile",
-            # 'sink_hqbpillvul_exec',
-            # 'sink_hqbpillvul_execSync',
-            'sink_hqbpillvul_eval'
-            ],
-        'nosql': [
-            'sink_hqbpillvul_nosql'
-            ],
-        'sanitation': [
-            'parseInt'
-            ],
-        'path_traversal': [
-            'pipe',
-            'sink_hqbpillvul_http_write'
-            ]
+    "os_command": [
+        "sink_hqbpillvul_execFile",
+        "sink_hqbpillvul_exec",
+        "sink_hqbpillvul_execSync",
+        "sink_hqbpillvul_spawn",
+        "sink_hqbpillvul_spawnSync",
+        "sink_hqbpillvul_execa_shell",
+        "sink_hqbpillvul_shelljs_exec",
+    ],
+    "os_command_strict": [
+        "sink_hqbpillvul_exec",
+        "sink_hqbpillvul_execSync",
+        "sink_hqbpillvul_execa_shell",
+        "sink_hqbpillvul_shelljs_exec",
+    ],
+    "xss": ["sink_hqbpillvul_http_write", "sink_hqbpillvul_http_setHeader"],
+    "proto_pollution": ["merge", "extend", "clone", "parse"],
+    "code_exec": [
+        "Function",
+        "eval",
+        # "sink_hqbpillvul_execFile",
+        # 'sink_hqbpillvul_exec',
+        # 'sink_hqbpillvul_execSync',
+        "sink_hqbpillvul_eval",
+    ],
+    "nosql": ["sink_hqbpillvul_nosql"],
+    "sanitation": ["parseInt"],
+    "path_traversal": ["pipe", "sink_hqbpillvul_http_write"],
 }
+
 
 def get_all_sign_list():
     """
@@ -54,4 +43,3 @@ def get_all_sign_list():
         res += signature_lists[key]
 
     return res
-

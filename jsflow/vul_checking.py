@@ -1,8 +1,10 @@
 """
 This module is used to check the vulnerabilities of the code.
 """
+
 from .trace_rule import TraceRule
 from .vul_func_lists import *
+
 
 def get_path_text(G, path, caller):
     """
@@ -18,17 +20,16 @@ def get_path_text(G, path, caller):
     cur_path_str2 = ""
     for node in path:
         cur_node_attr = G.get_node_attr(node)
-        if cur_node_attr.get('lineno:int') is None:
+        if cur_node_attr.get("lineno:int") is None:
             continue
-        if cur_node_attr.get('labels:label') in ['Artificial', 'Artificial_AST']:
+        if cur_node_attr.get("labels:label") in ["Artificial", "Artificial_AST"]:
             continue
         # if cur_node_attr.get('lineno:int') == '': # workaround?
         #     G.logger.error('No line number for node {} {}'.format(node, cur_node_attr))
         #     continue
-        cur_path_str1 += cur_node_attr['lineno:int'] + '->'
-        start_lineno = int(cur_node_attr['lineno:int'])
-        end_lineno = int(cur_node_attr['endlineno:int']
-                        or start_lineno)
+        cur_path_str1 += cur_node_attr["lineno:int"] + "->"
+        start_lineno = int(cur_node_attr["lineno:int"])
+        end_lineno = int(cur_node_attr["endlineno:int"] or start_lineno)
         content = None
         try:
             content = G.get_node_file_content(node)
@@ -36,19 +37,23 @@ def get_path_text(G, path, caller):
             pass
         if content is not None:
             for l in range(start_lineno, end_lineno + 1):
-                if 'function' in content[l]:
-                    content = ''.join(content[start_lineno:l + 1]).rstrip() + ' ... (omitted)\n'
+                if "function" in content[l]:
+                    content = (
+                        "".join(content[start_lineno : l + 1]).rstrip()
+                        + " ... (omitted)\n"
+                    )
                     break
             if type(content) is list:
-                content = ''.join(content[start_lineno:end_lineno + 1])
+                content = "".join(content[start_lineno : end_lineno + 1])
             cur_path_str2 += "{}\t{}".format(start_lineno, content)
-    cur_path_str1 += G.get_node_attr(caller).get('lineno:int', '?')
+    cur_path_str1 += G.get_node_attr(caller).get("lineno:int", "?")
     G.logger.debug(cur_path_str1)
 
     res_path += "==========================\n"
     res_path += "{}\n".format(G.get_node_file_path(path[0]))
     res_path += cur_path_str2
     return res_path
+
 
 def traceback(G, vul_type, start_node=None):
     """
@@ -62,25 +67,31 @@ def traceback(G, vul_type, start_node=None):
         the string description of paths,
         the list of callers,
     """
+
     def find_func_name(node):
-        func = G.get_node_attr(node).get('funcid:int')
+        func = G.get_node_attr(node).get("funcid:int")
         if not func:
-            while G.get_node_attr(node).get('type') not in [
-                'AST_FUNC_DECL', 'AST_CLOSURE', 'AST_METHOD', 'AST_TOPLEVEL']:
-                node = G.get_in_edges(node, edge_type='PARENT_OF')[0][0]
+            while G.get_node_attr(node).get("type") not in [
+                "AST_FUNC_DECL",
+                "AST_CLOSURE",
+                "AST_METHOD",
+                "AST_TOPLEVEL",
+            ]:
+                node = G.get_in_edges(node, edge_type="PARENT_OF")[0][0]
             func = node
         # print('found node', node, 'in function', func, G.get_name_from_child(func))
         return G.get_name_from_child(func)
+
     res_path = ""
     expoit_func_list = signature_lists[vul_type]
 
     if G.new_trace_rule:
-        func_nodes = G.get_node_by_attr('type', 'DUMMY_STMT')
+        func_nodes = G.get_node_by_attr("type", "DUMMY_STMT")
         # print('func nodes', func_nodes)
     else:
-        func_nodes = G.get_node_by_attr('type', 'AST_METHOD_CALL')
-        func_nodes += G.get_node_by_attr('type', 'AST_CALL')
-        func_nodes += G.get_node_by_attr('type', 'AST_NEW')
+        func_nodes = G.get_node_by_attr("type", "AST_METHOD_CALL")
+        func_nodes += G.get_node_by_attr("type", "AST_CALL")
+        func_nodes += G.get_node_by_attr("type", "AST_NEW")
     ret_pathes = []
     caller_list = []
     for func_node in func_nodes:
@@ -97,7 +108,7 @@ def traceback(G, vul_type, start_node=None):
 
             # here we treat the single calling as a possible path
             # pathes.append([caller])
-            G.logger.debug('Paths:')
+            G.logger.debug("Paths:")
 
             # give the end node one more chance, find the parent obj of the ending point
             """
@@ -115,14 +126,15 @@ def traceback(G, vul_type, start_node=None):
                 res_path += get_path_text(G, path, caller)
     return ret_pathes, res_path, caller_list
 
+
 def do_vul_checking(G, rule_list, pathes):
     """
     Check paths against a list of trace rules to identify vulnerabilities.
-    
+
     This function applies a list of trace rules to candidate paths. A path
     is considered vulnerable if it satisfies ALL rules in the rule_list.
     Each rule is a tuple of (rule_function_name, rule_arguments).
-    
+
     Args:
         G (Graph): The graph object containing the analysis results
         rule_list (list): List of rule tuples. Each tuple contains:
@@ -130,11 +142,11 @@ def do_vul_checking(G, rule_list, pathes):
             - rule_arguments: Arguments for the rule function (can be None)
         pathes (list): List of candidate paths to check. Each path is a
             list of node IDs.
-    
+
     Returns:
         list: List of paths that satisfy all rules in rule_list. Each path
             is a list of node IDs.
-    
+
     Example:
         >>> rule_list = [
         ...     ('has_user_input', None),
@@ -159,10 +171,11 @@ def do_vul_checking(G, rule_list, pathes):
             success_pathes.append(path)
     return success_pathes
 
+
 def vul_checking(G, pathes, vul_type):
     """
     Filter paths to identify those that satisfy vulnerability detection rules.
-    
+
     This function applies vulnerability-specific trace rules to candidate paths
     and returns only those paths that match the vulnerability pattern. Different
     vulnerability types have different rule sets that check for:
@@ -170,7 +183,7 @@ def vul_checking(G, pathes, vul_type):
     - Absence of sanitization functions
     - Presence of vulnerable sink functions
     - Path characteristics specific to each vulnerability type
-    
+
     Args:
         G (Graph): The graph object containing the analysis results
         pathes (list): List of candidate paths (sequences of node IDs) to check
@@ -181,62 +194,98 @@ def vul_checking(G, pathes, vul_type):
             - 'proto_pollution': Prototype pollution
             - 'path_traversal': Path traversal
             - 'nosql': NoSQL injection
-    
+
     Returns:
         list: List of paths that satisfy the vulnerability detection rules.
             Each path is a list of node IDs representing the vulnerable execution path.
-    
+
     Example:
         >>> from jsflow.vul_checking import vul_checking
         >>> vulnerable_paths = vul_checking(G, candidate_paths, 'xss')
         >>> print(f"Found {len(vulnerable_paths)} XSS vulnerabilities")
     """
     xss_rule_lists = [
-            [('has_user_input', None), ('not_start_with_func', ['sink_hqbpillvul_http_write']), ('not_exist_func', ['parseInt']), ('end_with_func', ['sink_hqbpillvul_http_write'])],
-            [('has_user_input', None), ('not_start_with_func', ['sink_hqbpillvul_http_setHeader']), ('not_exist_func', ['parseInt']), ('end_with_func', ['sink_hqbpillvul_http_setHeader'])]
-            ]
+        [
+            ("has_user_input", None),
+            ("not_start_with_func", ["sink_hqbpillvul_http_write"]),
+            ("not_exist_func", ["parseInt"]),
+            ("end_with_func", ["sink_hqbpillvul_http_write"]),
+        ],
+        [
+            ("has_user_input", None),
+            ("not_start_with_func", ["sink_hqbpillvul_http_setHeader"]),
+            ("not_exist_func", ["parseInt"]),
+            ("end_with_func", ["sink_hqbpillvul_http_setHeader"]),
+        ],
+    ]
     os_command_rule_lists = [
-            [('has_user_input', None), ('not_start_within_file', ['child_process.js']), ('not_exist_func', ['parseInt'])]
-            ]
+        [
+            ("has_user_input", None),
+            ("not_start_within_file", ["child_process.js"]),
+            ("not_exist_func", ["parseInt"]),
+        ]
+    ]
 
     code_exec_lists = [
-            [('has_user_input', None), ('not_start_within_file', ['eval.js']), ('not_exist_func', ['parseInt'])],
-            [('has_user_input', None), ('end_with_func', ['Function']), ('not_exist_func', ['parseInt'])],
-            [('has_user_input', None), ('end_with_func', ['eval']), ('not_exist_func', ['parseInt'])],
-            # include os command here
-            [('has_user_input', None), ('not_start_within_file', ['child_process.js']), ('not_exist_func', ['parseInt'])]
-            ]
+        [
+            ("has_user_input", None),
+            ("not_start_within_file", ["eval.js"]),
+            ("not_exist_func", ["parseInt"]),
+        ],
+        [
+            ("has_user_input", None),
+            ("end_with_func", ["Function"]),
+            ("not_exist_func", ["parseInt"]),
+        ],
+        [
+            ("has_user_input", None),
+            ("end_with_func", ["eval"]),
+            ("not_exist_func", ["parseInt"]),
+        ],
+        # include os command here
+        [
+            ("has_user_input", None),
+            ("not_start_within_file", ["child_process.js"]),
+            ("not_exist_func", ["parseInt"]),
+        ],
+    ]
     proto_pollution = [
-            [('has_user_input', None), ('not_exist_func', signature_lists['sanitation'])]
-            ]
+        [("has_user_input", None), ("not_exist_func", signature_lists["sanitation"])]
+    ]
     path_traversal = [
-            [('start_with_var', ['OPGen_TAINTED_VAR_url']),
-                ('not_exist_func', signature_lists['sanitation']), 
-                ('end_with_func', signature_lists['path_traversal']),
-                ('exist_func', ['sink_hqbpillvul_fs_read'])
-                # ('exist_func', ['__opgCombine'])
-            ],
-            [('start_with_var', ['OPGen_TAINTED_VAR_url']),
-                ('not_exist_func', ['parseInt']), 
-                ('end_with_func', ['sink_hqbpillvul_http_sendFile'])
-            ]
-            ]
+        [
+            ("start_with_var", ["OPGen_TAINTED_VAR_url"]),
+            ("not_exist_func", signature_lists["sanitation"]),
+            ("end_with_func", signature_lists["path_traversal"]),
+            ("exist_func", ["sink_hqbpillvul_fs_read"]),
+            # ('exist_func', ['__opgCombine'])
+        ],
+        [
+            ("start_with_var", ["OPGen_TAINTED_VAR_url"]),
+            ("not_exist_func", ["parseInt"]),
+            ("end_with_func", ["sink_hqbpillvul_http_sendFile"]),
+        ],
+    ]
     nosql_rule_lists = [
-            [('has_user_input', None), ('not_start_within_file', ['mongodb.js', 'monk.js']), ('not_exist_func', ['parseInt'])]
-            ]
+        [
+            ("has_user_input", None),
+            ("not_start_within_file", ["mongodb.js", "monk.js"]),
+            ("not_exist_func", ["parseInt"]),
+        ]
+    ]
 
     vul_type_map = {
-            "xss": xss_rule_lists,
-            "os_command": os_command_rule_lists,
-            "code_exec": code_exec_lists,
-            "proto_pollution": proto_pollution,
-            "path_traversal": path_traversal,
-            "nosql": nosql_rule_lists
-            }
+        "xss": xss_rule_lists,
+        "os_command": os_command_rule_lists,
+        "code_exec": code_exec_lists,
+        "proto_pollution": proto_pollution,
+        "path_traversal": path_traversal,
+        "nosql": nosql_rule_lists,
+    }
 
     rule_lists = vul_type_map[vul_type]
     success_paths = []
-    print('vul_checking', vul_type)
+    print("vul_checking", vul_type)
     """
     print(pathes)
     for path in pathes:
@@ -249,18 +298,25 @@ def vul_checking(G, pathes, vul_type):
     print("success: ", success_paths)
     return success_paths
 
+
 def check_pp(G):
-    print('Checking proto_pollution...')
-    def _get_children(node_id, edge_type=None, child_type=None, child_label=None, edge_scope=None):
+    print("Checking proto_pollution...")
+
+    def _get_children(
+        node_id, edge_type=None, child_type=None, child_label=None, edge_scope=None
+    ):
         nonlocal G
         children, scopes = [], []
         edges = G.get_out_edges(node_id, edge_type=edge_type)
         for edge in edges:
             aim_node_attr = G.get_node_attr(edge[1])
-            aim_edge_scope = edge[-1].get('scope')
-            if child_type is not None and aim_node_attr.get('type') != child_type:
+            aim_edge_scope = edge[-1].get("scope")
+            if child_type is not None and aim_node_attr.get("type") != child_type:
                 continue
-            if child_label is not None and aim_node_attr.get('labels:label') != child_label:
+            if (
+                child_label is not None
+                and aim_node_attr.get("labels:label") != child_label
+            ):
                 continue
             if edge_scope is not None and aim_edge_scope != edge_scope:
                 continue
@@ -271,20 +327,22 @@ def check_pp(G):
     results = set()
     for node in G.get_all_nodes():
         # check every assignment
-        if G.get_node_attr(node).get('type') != 'AST_ASSIGN':
+        if G.get_node_attr(node).get("type") != "AST_ASSIGN":
             continue
         children = G.get_ordered_ast_child_nodes(node)
         if len(children) != 2:
             continue
         left, right = children
         # whose left side is prop expression
-        if G.get_node_attr(left).get('type') not in ['AST_DIM', 'AST_PROP']:
+        if G.get_node_attr(left).get("type") not in ["AST_DIM", "AST_PROP"]:
             continue
         # get all possible scopes
-        _, scopes = _get_children(left, edge_type='REFERS_TO', child_label='Name')
+        _, scopes = _get_children(left, edge_type="REFERS_TO", child_label="Name")
         for scope in set(scopes):
             # the left side should have the name nodes of functions in built-in prototypes
-            name_nodes, _ = _get_children(left, edge_type='REFERS_TO', child_label='Name', edge_scope=scope)
+            name_nodes, _ = _get_children(
+                left, edge_type="REFERS_TO", child_label="Name", edge_scope=scope
+            )
             if not (set(name_nodes) & set(G.pollutable_name_nodes)):
                 continue
             # make sure the property names are tainted
@@ -292,17 +350,28 @@ def check_pp(G):
             if len(prop_children) != 2:
                 continue
             prop_name_ast_node = prop_children[1]
-            prop_name_obj_nodes, _ = _get_children(prop_name_ast_node, edge_type='REFERS_TO', child_label='Object', edge_scope=scope)
-            if not any(map(lambda obj: G.get_node_attr(obj).get('tainted'), prop_name_obj_nodes)):
+            prop_name_obj_nodes, _ = _get_children(
+                prop_name_ast_node,
+                edge_type="REFERS_TO",
+                child_label="Object",
+                edge_scope=scope,
+            )
+            if not any(
+                map(
+                    lambda obj: G.get_node_attr(obj).get("tainted"), prop_name_obj_nodes
+                )
+            ):
                 continue
             # the right side should have tainted objects
-            obj_nodes, _ = _get_children(right, edge_type='REFERS_TO', child_label='Object', edge_scope=scope)
-            if not any(map(lambda obj: G.get_node_attr(obj).get('tainted'), obj_nodes)):
+            obj_nodes, _ = _get_children(
+                right, edge_type="REFERS_TO", child_label="Object", edge_scope=scope
+            )
+            if not any(map(lambda obj: G.get_node_attr(obj).get("tainted"), obj_nodes)):
                 continue
             # if found, add the AST node
             results.add(node)
     if results:
-        print('found:', results)
+        print("found:", results)
     else:
-        print('not found')
+        print("not found")
     return results

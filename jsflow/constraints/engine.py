@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 # --- Expression IR ---------------------------------------------------------
 
+
 @dataclass
 class Expression:
     tainted: bool = False
@@ -75,7 +76,9 @@ def _node_taint(G, node_id):
     return bool(G.get_node_attr(node_id).get("tainted"))
 
 
-def build_expressions(G, target_obj_ids, contains: bool = True) -> Dict[str, Expression]:
+def build_expressions(
+    G, target_obj_ids, contains: bool = True
+) -> Dict[str, Expression]:
     """
     Build expression DAGs for each target object by following CONTRIBUTES_TO edges.
 
@@ -164,7 +167,10 @@ def _op_to_expr(op: str, args: List[Expression], tainted: bool) -> Expression:
     if op == "unknown_add":
         # Could be string or numeric; represent as choice
         return Choice(
-            options=[Concat(parts=args, tainted=tainted), Add(terms=args, tainted=tainted)],
+            options=[
+                Concat(parts=args, tainted=tainted),
+                Add(terms=args, tainted=tainted),
+            ],
             tainted=tainted,
         )
     if op == "sub":
@@ -173,7 +179,9 @@ def _op_to_expr(op: str, args: List[Expression], tainted: bool) -> Expression:
         if args:
             # fall back to left-associative subtraction
             head, *rest = args
-            return Sub(left=head, right=Add(terms=rest, tainted=tainted), tainted=tainted)
+            return Sub(
+                left=head, right=Add(terms=rest, tainted=tainted), tainted=tainted
+            )
     if op == "array_join":
         return Concat(parts=args, tainted=tainted)
     return UnknownOp(op=op, args=args, tainted=tainted)
@@ -223,7 +231,9 @@ class _MixedSymbol:
         return self._string
 
 
-def encode_to_z3(expr: Expression, solver: z3.Solver, cache: Optional[_SymbolCache] = None):
+def encode_to_z3(
+    expr: Expression, solver: z3.Solver, cache: Optional[_SymbolCache] = None
+):
     """
     Convert an Expression DAG to a z3 term and add necessary constraints.
     Returns the primary term (string or number) for the expression.
@@ -247,7 +257,9 @@ def _encode(expr: Expression, solver: z3.Solver, cache: _SymbolCache):
         if expr.type_hint == "string":
             return sym.string, "string"
         # Unknown: prefer string if available
-        return (sym.string or sym.number), ("string" if sym.string is not None else "number")
+        return (sym.string or sym.number), (
+            "string" if sym.string is not None else "number"
+        )
     if isinstance(expr, Concat):
         parts = [_require_string(_encode(p, solver, cache)) for p in expr.parts]
         if len(parts) == 1:
@@ -285,7 +297,9 @@ def _encode(expr: Expression, solver: z3.Solver, cache: _SymbolCache):
 
     # Fallback: treat as fresh symbol
     sym = cache.fresh(prefix="u")
-    return (sym.string or sym.number), ("string" if sym.string is not None else "number")
+    return (sym.string or sym.number), (
+        "string" if sym.string is not None else "number"
+    )
 
 
 def _require_string(encoded):

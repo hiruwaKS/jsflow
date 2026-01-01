@@ -23,7 +23,7 @@ Main Components:
 Usage:
     Command line:
         python -m jsflow input.js -t os_command
-    
+
     Programmatic:
         from jsflow.launcher import unittest_main
         result, graph = unittest_main('input.js', vul_type='os_command')
@@ -36,13 +36,13 @@ Example:
 
 __version__ = "1.0.0"
 __all__ = [
-    'Graph',
-    'launcher',
-    'opgen',
-    'vul_checking',
-    'trace_rule',
-    'solver',
-    'logger',
-    'helpers',
-    'utilities',
+    "Graph",
+    "launcher",
+    "opgen",
+    "vul_checking",
+    "trace_rule",
+    "solver",
+    "logger",
+    "helpers",
+    "utilities",
 ]

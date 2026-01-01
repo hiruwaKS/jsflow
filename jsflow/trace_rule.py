@@ -6,14 +6,17 @@ one based on `Graph.new_trace_rule`, providing a stable interface for callers
 that need to ask questions such as “does this path start in file X?” or “does
 it contain user input?”.
 """
+
+
 class TraceRuleInterface:
     """Base interface to keep rule implementations aligned."""
+
     def __init__(self, key, value, G):
         pass
 
     def check(self, path):
         pass
-    
+
 
 class TraceRuleNew(TraceRuleInterface):
     """
@@ -26,17 +29,26 @@ class TraceRuleNew(TraceRuleInterface):
         self.graph = G
 
     def find_func_name(self, node):
-        func = self.graph.get_node_attr(node).get('funcid:int')
+        func = self.graph.get_node_attr(node).get("funcid:int")
         if not func:
             while True:
-                print('goes to', node, self.graph.get_node_attr(node), self.graph.get_in_edges(node, edge_type='PARENT_OF'))
-                if self.graph.get_node_attr(node).get('type') in [
-                        'AST_FUNC_DECL', 'AST_CLOSURE', 'AST_METHOD', 'AST_TOPLEVEL']:
+                print(
+                    "goes to",
+                    node,
+                    self.graph.get_node_attr(node),
+                    self.graph.get_in_edges(node, edge_type="PARENT_OF"),
+                )
+                if self.graph.get_node_attr(node).get("type") in [
+                    "AST_FUNC_DECL",
+                    "AST_CLOSURE",
+                    "AST_METHOD",
+                    "AST_TOPLEVEL",
+                ]:
                     func = node
                     break
-                edges = self.graph.get_in_edges(node, edge_type='PARENT_OF')
+                edges = self.graph.get_in_edges(node, edge_type="PARENT_OF")
                 if edges:
-                    node = self.graph.get_in_edges(node, edge_type='PARENT_OF')[0][0]
+                    node = self.graph.get_in_edges(node, edge_type="PARENT_OF")[0][0]
                 else:
                     func = None
                     break
@@ -64,7 +76,7 @@ class TraceRuleNew(TraceRuleInterface):
             if called_func_name in func_names:
                 return True
 
-        return False 
+        return False
 
     def not_exist_func(self, func_names, path):
         """
@@ -84,7 +96,7 @@ class TraceRuleNew(TraceRuleInterface):
         """
         start_node = path[0]
         cur_func = self.find_func_name(start_node)
-        return cur_func in func_names 
+        return cur_func in func_names
 
     def not_start_with_func(self, func_names, path):
         """
@@ -139,13 +151,13 @@ class TraceRuleNew(TraceRuleInterface):
         cur_node = self.graph.get_node_attr(start_node)
         if file_name is None:
             return False
-        file_name = file_name if '/' not in file_name else file_name.split('/')[-1]
+        file_name = file_name if "/" not in file_name else file_name.split("/")[-1]
         return file_name in file_names
 
     def start_with_var(self, var_names, path):
-        #TODO: not finished, need to update the var name finding algorithm
+        # TODO: not finished, need to update the var name finding algorithm
         """
-        check whether a path starts with a variable 
+        check whether a path starts with a variable
         Args:
             var_names: the possible var names
             path: the path to be checked
@@ -163,11 +175,11 @@ class TraceRuleNew(TraceRuleInterface):
     def has_user_input(self, _, path):
         """
         check if any node in this path contains user input
-        user input is defined as in the http, process or 
+        user input is defined as in the http, process or
         the arguments of the module entrance functions
-        
+
         we check by the obj in the edges
-        Args: 
+        Args:
             path: the path
         Return:
             True or False
@@ -175,18 +187,21 @@ class TraceRuleNew(TraceRuleInterface):
         pre_node = None
         for node in path:
             if not pre_node:
-                pre_node = node;
+                pre_node = node
                 continue
-            
+
             cur_edges = self.graph.get_edge_attr(pre_node, node)
             # print("{} --{}--> {}".format(pre_node, cur_edges, node))
             if not cur_edges:
                 continue
             for k in cur_edges:
-                if 'type:TYPE' in cur_edges[k] and cur_edges[k]['type:TYPE'] == "OBJ_REACHES":
-                    obj = cur_edges[k]['obj']
+                if (
+                    "type:TYPE" in cur_edges[k]
+                    and cur_edges[k]["type:TYPE"] == "OBJ_REACHES"
+                ):
+                    obj = cur_edges[k]["obj"]
                     obj_attr = self.graph.get_node_attr(obj)
-                    if 'tainted' in obj_attr and obj_attr['tainted']:
+                    if "tainted" in obj_attr and obj_attr["tainted"]:
                         return True
             pre_node = node
 
@@ -202,7 +217,7 @@ class TraceRuleNew(TraceRuleInterface):
                     print(obj[0], node_attr, self.graph.get_node_attr(obj[1]))
                     return True
             """
-        if self.start_within_file(['http.js', 'process.js', 'yargs.js'], path):
+        if self.start_within_file(["http.js", "process.js", "yargs.js"], path):
             return True
         return False
 
@@ -213,16 +228,16 @@ class TraceRuleNew(TraceRuleInterface):
             the running result of the obj
         """
         key_map = {
-                "exist_func": self.exist_func,
-                "not_exist_func": self.not_exist_func,
-                "start_with_func": self.start_with_func,
-                "not_start_with_func": self.not_start_with_func,
-                "start_within_file": self.start_within_file,
-                "not_start_within_file": self.not_start_within_file,
-                "end_with_func": self.end_with_func,
-                "has_user_input": self.has_user_input,
-                "start_with_var": self.start_with_var
-                }
+            "exist_func": self.exist_func,
+            "not_exist_func": self.not_exist_func,
+            "start_with_func": self.start_with_func,
+            "not_start_with_func": self.not_start_with_func,
+            "start_within_file": self.start_within_file,
+            "not_start_within_file": self.not_start_within_file,
+            "end_with_func": self.end_with_func,
+            "has_user_input": self.has_user_input,
+            "start_with_var": self.start_with_var,
+        }
 
         if self.key in key_map:
             check_function = key_map[self.key]
@@ -258,8 +273,11 @@ class TraceRuleOld(TraceRuleInterface):
             childern = self.graph.get_all_child_nodes(node)
             for child in childern:
                 cur_node = self.graph.get_node_attr(child)
-                if 'type' in cur_node:
-                    if cur_node['type'] == 'AST_CALL' or cur_node['type'] == 'AST_METHOD_CALL':
+                if "type" in cur_node:
+                    if (
+                        cur_node["type"] == "AST_CALL"
+                        or cur_node["type"] == "AST_METHOD_CALL"
+                    ):
                         cur_func = self.graph.get_name_from_child(child)
                         called_func_list.add(cur_func)
 
@@ -269,7 +287,7 @@ class TraceRuleOld(TraceRuleInterface):
             if called_func_name in func_names:
                 return True
 
-        return False 
+        return False
 
     def not_exist_func(self, func_names, path):
         """
@@ -292,13 +310,16 @@ class TraceRuleOld(TraceRuleInterface):
         childern = self.graph.get_all_child_nodes(start_node)
         for child in childern:
             cur_node = self.graph.get_node_attr(child)
-            if 'type' in cur_node:
-                if cur_node['type'] == 'AST_CALL' or cur_node['type'] == 'AST_METHOD_CALL':
+            if "type" in cur_node:
+                if (
+                    cur_node["type"] == "AST_CALL"
+                    or cur_node["type"] == "AST_METHOD_CALL"
+                ):
                     cur_func = self.graph.get_name_from_child(child)
                     if cur_func not in func_names:
                         # if not current, maybe inside the call there is another call
                         continue
-                    return cur_func in func_names 
+                    return cur_func in func_names
         return False
 
     def not_start_with_func(self, func_names, path):
@@ -340,13 +361,16 @@ class TraceRuleOld(TraceRuleInterface):
         childern = self.graph.get_all_child_nodes(end_node)
         for child in childern:
             cur_node = self.graph.get_node_attr(child)
-            if 'type' in cur_node:
-                if cur_node['type'] == 'AST_CALL' or cur_node['type'] == 'AST_METHOD_CALL':
+            if "type" in cur_node:
+                if (
+                    cur_node["type"] == "AST_CALL"
+                    or cur_node["type"] == "AST_METHOD_CALL"
+                ):
                     cur_func = self.graph.get_name_from_child(child)
                     if cur_func not in func_names:
                         # if not current, maybe inside the call there is another call
                         continue
-                    return cur_func in func_names 
+                    return cur_func in func_names
 
     def start_within_file(self, file_names, path):
         """
@@ -363,13 +387,13 @@ class TraceRuleOld(TraceRuleInterface):
         cur_node = self.graph.get_node_attr(start_node)
         if file_name is None:
             return False
-        file_name = file_name if '/' not in file_name else file_name.split('/')[-1]
+        file_name = file_name if "/" not in file_name else file_name.split("/")[-1]
         return file_name in file_names
 
     def start_with_var(self, var_names, path):
-        #TODO: not finished, need to update the var name finding algorithm
+        # TODO: not finished, need to update the var name finding algorithm
         """
-        check whether a path starts with a variable 
+        check whether a path starts with a variable
         Args:
             var_names: the possible var names
             path: the path to be checked
@@ -387,11 +411,11 @@ class TraceRuleOld(TraceRuleInterface):
     def has_user_input(self, _, path):
         """
         check if any node in this path contains user input
-        user input is defined as in the http, process or 
+        user input is defined as in the http, process or
         the arguments of the module entrance functions
-        
+
         we check by the obj in the edges
-        Args: 
+        Args:
             path: the path
         Return:
             True or False
@@ -399,18 +423,21 @@ class TraceRuleOld(TraceRuleInterface):
         pre_node = None
         for node in path:
             if not pre_node:
-                pre_node = node;
+                pre_node = node
                 continue
-            
+
             cur_edges = self.graph.get_edge_attr(pre_node, node)
             # print("{} --{}--> {}".format(pre_node, cur_edges, node))
             if not cur_edges:
                 continue
             for k in cur_edges:
-                if 'type:TYPE' in cur_edges[k] and cur_edges[k]['type:TYPE'] == "OBJ_REACHES":
-                    obj = cur_edges[k]['obj']
+                if (
+                    "type:TYPE" in cur_edges[k]
+                    and cur_edges[k]["type:TYPE"] == "OBJ_REACHES"
+                ):
+                    obj = cur_edges[k]["obj"]
                     obj_attr = self.graph.get_node_attr(obj)
-                    if 'tainted' in obj_attr and obj_attr['tainted']:
+                    if "tainted" in obj_attr and obj_attr["tainted"]:
                         return True
             pre_node = node
 
@@ -426,7 +453,7 @@ class TraceRuleOld(TraceRuleInterface):
                     print(obj[0], node_attr, self.graph.get_node_attr(obj[1]))
                     return True
             """
-        if self.start_within_file(['http.js', 'process.js', 'yargs.js'], path):
+        if self.start_within_file(["http.js", "process.js", "yargs.js"], path):
             return True
         return False
 
@@ -437,16 +464,16 @@ class TraceRuleOld(TraceRuleInterface):
             the running result of the obj
         """
         key_map = {
-                "exist_func": self.exist_func,
-                "not_exist_func": self.not_exist_func,
-                "start_with_func": self.start_with_func,
-                "not_start_with_func": self.not_start_with_func,
-                "start_within_file": self.start_within_file,
-                "not_start_within_file": self.not_start_within_file,
-                "end_with_func": self.end_with_func,
-                "has_user_input": self.has_user_input,
-                "start_with_var": self.start_with_var
-                }
+            "exist_func": self.exist_func,
+            "not_exist_func": self.not_exist_func,
+            "start_with_func": self.start_with_func,
+            "not_start_with_func": self.not_start_with_func,
+            "start_within_file": self.start_within_file,
+            "not_start_within_file": self.not_start_within_file,
+            "end_with_func": self.end_with_func,
+            "has_user_input": self.has_user_input,
+            "start_with_var": self.start_with_var,
+        }
 
         if self.key in key_map:
             check_function = key_map[self.key]
@@ -459,36 +486,37 @@ class TraceRuleOld(TraceRuleInterface):
 class TraceRule(TraceRuleInterface):
     """
     Trace rule wrapper that delegates to either new or old trace rule implementation.
-    
+
     This class provides a unified interface for trace rules, automatically
     selecting between TraceRuleNew and TraceRuleOld based on the graph's
     configuration.
-    
+
     Args:
         key (str): Rule function name (e.g., 'has_user_input', 'end_with_func')
         value: Rule arguments (can be None, a list, or other types)
         G (Graph): The graph object for context
-    
+
     Example:
         >>> rule = TraceRule('has_user_input', None, G)
         >>> if rule.check(path):
         ...     print("Path contains user input")
     """
+
     def __init__(self, key, value, G):
         if G.new_trace_rule:
             self.trace_rule = TraceRuleNew(key, value, G)
         else:
             self.trace_rule = TraceRuleOld(key, value, G)
-    
+
     def check(self, path):
         """
         Check if a path satisfies this trace rule.
-        
+
         Args:
             path (list): List of node IDs representing an execution path
-        
+
         Returns:
             bool: True if the path satisfies the rule, False otherwise
         """
-        print('checking path', path)
+        print("checking path", path)
         return self.trace_rule.check(path)

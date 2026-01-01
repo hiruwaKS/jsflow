@@ -7,7 +7,7 @@ The jsflow module consists of several key components:
 ## Core Modules
 
 - **`graph.py`**: Implements the `Graph` class, which maintains a NetworkX-based multi-digraph representing the code structure, data flows, and control flows
-- **`opgen.py`**: Operation generator that performs AST traversal and symbolic execution
+- **`opgen.py`**: Operation generator that performs AST traversal and static analysis
 - **`launcher.py`**: Main entry point and command-line interface
 - **`vul_checking.py`**: Vulnerability detection engine that applies trace rules to identify security issues
 - **`trace_rule.py`**: Defines trace rules for vulnerability pattern matching
@@ -37,7 +37,7 @@ The jsflow module consists of several key components:
    - Scopes and variables
    - JavaScript built-in prototypes and constructors
 
-3. **Symbolic Execution**: The tool simulates program execution, tracking:
+3. **Static Analysis**: The tool simulates program execution, tracking:
    - Object property accesses and modifications
    - Function calls and returns
    - Control flow paths (branches, loops, conditionals)
