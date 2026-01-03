@@ -5,13 +5,12 @@ Graph class, providing small conversions (e.g., JS literal evaluation,
 wildcard handling) and branch-aware copy helpers.
 """
 
-from .graph import Graph
-from .utilities import NodeHandleResult, ExtraInfo, BranchTag
-from .utilities import wildcard, undefined
-from .utilities import get_random_hex
 import math
-from typing import Callable, List, Iterable
-from collections import defaultdict
+from typing import List
+
+from .graph import Graph
+from .utilities import NodeHandleResult, BranchTag
+from .utilities import wildcard, undefined
 
 
 def eval_value(G: Graph, s: str, return_obj_node=False, ast_node=None):
@@ -54,26 +53,24 @@ def eval_value(G: Graph, s: str, return_obj_node=False, ast_node=None):
         result = NodeHandleResult(name="-Infinity", obj_nodes=[G.negative_infinity_obj])
     else:
         evaluated = eval(s)
-        if type(evaluated) is float or type(evaluated) is int:
+        if isinstance(evaluated, (float, int)):
             js_type = "number"
-        elif type(evaluated) is str:
+        elif isinstance(evaluated, str):
             js_type = "string"
         if return_obj_node:
             added_obj = G.add_obj_node(ast_node, js_type, s)
             result = NodeHandleResult(obj_nodes=[added_obj])
     if return_obj_node:
         return evaluated, js_type, result
-    else:
-        return evaluated, js_type
+    return evaluated, js_type
 
 
 def val_to_str(value, default=wildcard):
     if type(value) in [float, int]:
         return "%g" % value
-    else:
-        if value is None or value == wildcard:
-            return default
-        return str(value)
+    if value is None or value == wildcard:
+        return default
+    return str(value)
 
 
 def val_to_float(value, default=wildcard):
@@ -93,8 +90,7 @@ def js_cmp(v1, v2):
     if type(v1) == type(v2):
         if v1 == undefined and v2 == undefined:
             return 0
-        else:
-            return cmp(v1, v2)
+        return cmp(v1, v2)
     else:
         # s1 = val_to_str(v1)
         # s2 = val_to_str(v2)
@@ -132,7 +128,7 @@ def convert_prop_names_to_wildcard(
 def copy_objs_for_branch(
     G: Graph, handle_result: NodeHandleResult, branch, ast_node=None, deep=True
 ) -> NodeHandleResult:
-    returned_objs = list()
+    returned_objs = []
     for obj in handle_result.obj_nodes:
         copied_obj = None
         for e in G.get_in_edges(obj, edge_type="NAME_TO_OBJ"):
@@ -170,7 +166,7 @@ def copy_objs_for_parameters(
     delete_original=True,
 ) -> List[List]:
     # deprecated
-    returned_objs = list()
+    returned_objs = []
     for obj in handle_result.obj_nodes:
         copied_objs = []
         for i in range(number_of_copies):
@@ -192,7 +188,7 @@ def to_python_array(G: Graph, array_obj, value=False):
     edge_data = [[]]
     for name_node in G.get_prop_name_nodes(array_obj):
         name = G.get_node_attr(name_node).get("name")
-        if name == "length" or name == "__proto__":
+        if name in ("length", "__proto__"):
             continue
         try:
             i = int(name)
@@ -270,10 +266,8 @@ def get_func_name(G: Graph, ast_node, recursive=True):
                 return get_func_name(
                     G, G.get_in_edges(ast_node, edge_type="PARENT_OF")[0][0]
                 )
-            else:
-                return None
-        else:
-            return name
+            return None
+        return name
     elif node_type in ["AST_METHOD_CALL", "AST_PROP"]:
         return get_func_name(
             G, G.get_ordered_ast_child_nodes(ast_node)[1], recursive=False

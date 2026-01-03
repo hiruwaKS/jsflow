@@ -2,30 +2,30 @@
 This module is used to generate the object property graph from the AST.
 """
 
+import hashlib
+import json
+import os
+import re
+import time
+import traceback as tb
+from collections import defaultdict
+from itertools import chain, islice
+from typing import Tuple
+
+import sty
+
 from .graph import Graph
 from .utilities import NodeHandleResult, ExtraInfo
 from .utilities import BranchTag, BranchTagContainer, get_random_hex
-import os
-import sys
-import sty
-import json
-import re
-import traceback as tb
-from .logger import *
+from .logger import create_logger, ATTENTION
 from . import modeled_js_builtins, modeled_builtin_modules
-from .helpers import val_to_str, val_to_float, is_int
-from .helpers import js_cmp, wildcard, undefined, is_wildcard_obj
+from .helpers import val_to_str, val_to_float
+from .helpers import wildcard, undefined, is_wildcard_obj
 from .helpers2 import *
 from .esprima import esprima_parse, esprima_search
 from . import solver
-from itertools import chain, islice
-from collections import defaultdict
-from .trace_rule import TraceRule
 from .vul_checking import *
-from func_timeout import func_timeout, FunctionTimedOut
-import time
-from typing import Tuple
-import hashlib
+from .vul_func_lists import signature_lists
 
 registered_func = {}
 
@@ -4999,8 +4999,6 @@ def run_exported_functions(G, module_exports_objs, extra, file_path):
 
         # rough control flow check
         # if G.first_pass:
-        from .vul_func_lists import signature_lists
-
         if G.vul_type in signature_lists:
             if not (G.two_pass and not G.first_pass):
                 # if not second pass in two-pass analysis
@@ -5104,8 +5102,6 @@ def cf_dfs(
     nop=None,
     cg_nodes=None,
 ):
-    from .vul_func_lists import signature_lists
-
     if reachable is None:
         reachable = set()
         finished = set()
@@ -5188,8 +5184,6 @@ def cg_dfs(
     finished=None,
     edge_type="CALLS",
 ):
-    from .vul_func_lists import signature_lists
-
     if G.vul_type not in signature_lists:
         return
     if reachable is None:
@@ -5301,8 +5295,6 @@ def cgg_cf_dfs(
     """
     Deprecated
     """
-    from .vul_func_lists import signature_lists
-
     if targets:
         if current in targets:
             yield path
@@ -6537,7 +6529,6 @@ def build_rough_call_graph(G: Graph, entry_node):
         return complexity + 1
 
     dummy_handle_node(G, entry_node)
-    from .vul_func_lists import signature_lists
 
     signature_decls = []
     for signature_name in signature_lists.get(G.vul_type, []):

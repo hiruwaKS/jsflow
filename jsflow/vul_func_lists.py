@@ -39,7 +39,7 @@ def get_all_sign_list():
     return a list of all the signature functions
     """
     res = []
-    for key in signature_lists:
-        res += signature_lists[key]
+    for key, value in signature_lists.items():
+        res += value
 
     return res

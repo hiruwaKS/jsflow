@@ -4,24 +4,21 @@ It is used to parse the command line arguments and run the analysis.
 """
 
 import argparse
-import sys
-import sty
 import os
+import sys
+import time
+from datetime import datetime
+
+import sty
+
 from .graph import Graph
-from .logger import *
+from .logger import create_logger, ATTENTION
 from .opgen import (
-    register_func,
-    handle_node,
-    add_edges_between_funcs,
     analyze_files,
     analyze_string,
     generate_obj_graph,
 )
-from .helpers import get_func_name
-from .trace_rule import TraceRule
-from .vul_checking import *
-from datetime import datetime
-import time
+from .vul_checking import traceback, vul_checking, get_path_text
 
 
 def setup_log_directory():
@@ -253,7 +250,7 @@ def main():
         "analyze ./nodes.csv and ./rels.csv.",
     )
     args = parser.parse_args()
-    if args.vul_type == "prototype_pollution" or args.vul_type == "pp":
+    if args.vul_type in ("prototype_pollution", "pp"):
         args.vul_type = "proto_pollution"
     if args.vul_type == "ipt":
         args.vul_type = "int_prop_tampering"
@@ -313,15 +310,14 @@ def main():
                 raise argparse.ArgumentTypeError(
                     "stdin cannot be used with module mode"
                 )
-            else:
-                # analyze from stdin
-                source = sys.stdin.read()
-                analyze_string(G, source, generate_graph=True)
+            # analyze from stdin
+            source = sys.stdin.read()
+            analyze_string(G, source, generate_graph=True)
         else:
             G.entry_file_path = args.input_file
             if args.module:
                 # pretend another file is requiring this module
-                script = "var main_func=require('{}');".format(args.input_file)
+                script = f"var main_func=require('{args.input_file}');"
                 analyze_string(G, script, generate_graph=True)
             else:
                 # analyze from JS source code files
@@ -329,9 +325,8 @@ def main():
     else:
         if args.module:
             raise argparse.ArgumentTypeError("CSV cannot be used with module mode")
-        else:
-            # analyze from CSVs
-            G.import_from_CSV("./nodes.csv", "./rels.csv")
+        # analyze from CSVs
+        G.import_from_CSV("./nodes.csv", "./rels.csv")
             generate_obj_graph(G, "0")
     total_num_stat = G.get_total_num_statements()
     print("Statements:", len(G.covered_stat), total_num_stat)
@@ -408,7 +403,7 @@ def main():
 
         if len(res_pathes) != 0:
             vul_func_file = os.path.join(G.log_dir, "vul_func_names.csv")
-            with open(vul_func_file, "a") as fp:
+            with open(vul_func_file, "a", encoding="utf-8") as fp:
                 logger.log(
                     ATTENTION,
                     f"{G.vul_type} successfully found in "
