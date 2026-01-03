@@ -1565,7 +1565,57 @@ def handle_var(G: Graph, ast_node, side=None, extra=None):
 
 def handle_node(G: Graph, node_id, extra=None) -> NodeHandleResult:
     """
-    for different node type, do different actions to handle this node
+    Handle an AST node by dispatching to appropriate handler based on node type.
+
+    This is the central dispatcher function for AST traversal during symbolic
+    execution. It examines the node type and calls the appropriate handler
+    function to:
+    - Evaluate expressions and create object nodes
+    - Execute statements and update control flow
+    - Handle declarations, assignments, and function calls
+    - Track data flows and build the object property graph
+
+    The function supports:
+    - Time limits for function execution
+    - Status output for long-running analyses
+    - Early termination when vulnerabilities are found
+    - Branch-aware execution with ExtraInfo
+
+    Node types handled include:
+    - Expressions: AST_VAR, AST_ASSIGN, AST_CALL, AST_METHOD_CALL, etc.
+    - Statements: AST_IF, AST_FOR, AST_WHILE, AST_RETURN, etc.
+    - Declarations: AST_FUNC_DECL, AST_CLOSURE, AST_VAR_DECL, etc.
+    - Literals: AST_STRING, AST_NUMBER, AST_BOOL, etc.
+
+    Args:
+        G (Graph): The graph object containing analysis state.
+        node_id: AST node ID to handle.
+        extra (ExtraInfo, optional): Additional context for node handling, including:
+            - branches: Current branch context
+            - parent_obj: Parent object for property access
+            - caller_ast: Calling AST node for function calls
+            Defaults to None.
+
+    Returns:
+        NodeHandleResult: Result of handling the node, containing:
+            - obj_nodes: Object nodes created or referenced
+            - name_nodes: Name nodes (variables) involved
+            - values: Literal values if applicable
+            - used_objs: Objects used during evaluation
+            - Other fields depending on node type
+
+    Side Effects:
+        - Adds nodes and edges to graph based on node semantics
+        - Updates G.cur_objs, G.cur_scope for execution context
+        - May update G.covered_stat for coverage tracking
+        - May trigger function calls, creating new execution contexts
+
+    Example:
+        >>> # Handle a variable reference
+        >>> result = handle_node(G, var_node_id)
+        >>> # Handle an assignment with branch context
+        >>> extra = ExtraInfo(branches=BranchTagContainer([branch]))
+        >>> result = handle_node(G, assign_node_id, extra=extra)
     """
     if (
         G.function_time_limit
@@ -2435,7 +2485,50 @@ def decl_vars_and_funcs(G, ast_node, var=True, func=True):
 
 def jsflow_function(G, func_ast, branches=None, block_scope=True, caller_ast=None):
     """
-    Analyze a function by running its body.
+    Analyze a JavaScript function by symbolically executing its body.
+
+    This function performs the core symbolic execution for a function. It:
+    1. Sets up the function's scope and execution context
+    2. Handles function parameters and 'this' binding
+    3. Executes the function body statement by statement
+    4. Tracks return values and objects used during execution
+    5. Manages call depth limits to prevent infinite recursion
+
+    The function supports:
+    - Branch-aware execution (tracking which branches are taken)
+    - Two-pass analysis (rough first pass, detailed second pass)
+    - Call depth limiting to prevent path explosion
+    - Execution counter limits to prevent infinite loops
+
+    Args:
+        G (Graph): The graph object containing analysis state.
+        func_ast: AST node ID of the function to analyze.
+        branches (BranchTagContainer, optional): Current branch context for
+            path-sensitive analysis. If None, creates empty container.
+            Defaults to None.
+        block_scope (bool, optional): Whether to create a block scope for the
+            function body. Defaults to True.
+        caller_ast: AST node ID of the calling statement. Used for call depth
+            tracking. If None, function is called from top-level. Defaults to None.
+
+    Returns:
+        tuple: (returned_objs, used_objs) where:
+            - returned_objs: List of object nodes that may be returned
+            - used_objs: List of object nodes used during execution
+            Returns (None, None) if function is skipped due to call limit.
+            Returns ([], []) if function is skipped due to CF filtering.
+
+    Side Effects:
+        - Creates function scope and parameter bindings in graph
+        - Executes function body, adding nodes and edges to graph
+        - Updates G.caller_counter and G.caller_stack for call tracking
+        - Updates G.function_returns with return values
+        - May update G.possible_cf_nodes in two-pass mode
+
+    Example:
+        >>> # Analyze a function with branch context
+        >>> branches = BranchTagContainer([BranchTag(point="If123", branch="0")])
+        >>> returned, used = jsflow_function(G, func_node, branches=branches)
     """
 
     if branches is None or G.single_branch:
@@ -5967,7 +6060,38 @@ def print_handle_result(G: Graph, handle_result: NodeHandleResult):
 
 def generate_obj_graph(G: Graph, entry_nodeid):
     """
-    generate the object graph of a program
+    Generate the object property graph (OPG) for a JavaScript program.
+
+    This is the core function that performs symbolic execution to build the
+    object property graph. It:
+    1. Initializes the graph with JavaScript built-ins and base objects
+    2. Traverses the AST starting from the entry node
+    3. Simulates program execution, tracking object states and data flows
+    4. Handles control flow, function calls, and branch conditions
+    5. Builds the complete graph representation for vulnerability analysis
+
+    The function supports two-pass analysis mode for improved precision:
+    - First pass: Rough analysis to identify relevant control flow paths
+    - Second pass: Detailed analysis only on paths identified in first pass
+
+    Args:
+        G (Graph): The graph object to populate with analysis results.
+        entry_nodeid (str): AST node ID to start analysis from. Typically "0"
+            for the root of the program, but can be any AST node for partial
+            analysis.
+
+    Side Effects:
+        - Populates G with nodes and edges representing the program structure
+        - Updates G.covered_stat and G.covered_func with coverage information
+        - May update G.possible_cf_nodes if in two-pass mode
+        - Increments G.finished_num_of_passes
+
+    Example:
+        >>> G = Graph()
+        >>> G.setup1()
+        >>> modeled_js_builtins.setup_js_builtins(G)
+        >>> G.setup2()
+        >>> generate_obj_graph(G, "0")  # Start from root
     """
     G.setup1()
     modeled_js_builtins.setup_js_builtins(G)
@@ -6088,6 +6212,49 @@ def analyze_files(G, path, start_node_id=0, check_signatures=[]):
 def analyze_string(
     G, source_code, start_node_id=None, generate_graph=False, expression=False
 ):
+    """
+    Analyze JavaScript source code from a string and optionally generate object graph.
+
+    This function parses JavaScript code from a string (rather than a file) and
+    optionally performs symbolic execution to build the object property graph.
+    It's useful for:
+    - Analyzing code snippets or dynamically generated code
+    - Module mode analysis (wrapping require() calls)
+    - Testing and interactive analysis
+
+    The function supports:
+    - Two-pass analysis for improved precision
+    - Expression-only parsing (for evaluating expressions)
+    - Graph generation control (can parse without executing)
+
+    Args:
+        G (Graph): The graph object to populate with analysis results.
+        source_code (str): JavaScript source code to analyze.
+        start_node_id (int, optional): Starting node ID for AST import. If None,
+            uses G.cur_id. Defaults to None.
+        generate_graph (bool, optional): If True, perform symbolic execution to
+            build the object property graph. If False, only parse and import AST.
+            Defaults to False.
+        expression (bool, optional): If True, parse as an expression rather than
+            a statement. Defaults to False.
+
+    Returns:
+        None: Results are stored in the graph object G.
+
+    Side Effects:
+        - Parses source code and imports AST into graph
+        - If generate_graph=True, performs symbolic execution
+        - Updates G with nodes, edges, and analysis results
+        - May update G.possible_cf_nodes in two-pass mode
+
+    Example:
+        >>> # Analyze a code snippet
+        >>> code = "var x = req.query.id; exec(x);"
+        >>> analyze_string(G, code, generate_graph=True)
+        >>> # Analyze as expression
+        >>> expr = "a + b"
+        >>> analyze_string(G, expr, expression=True, generate_graph=True)
+    """
     first_pass_time = 0
     second_pass_time = 0
 

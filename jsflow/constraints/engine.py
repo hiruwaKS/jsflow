@@ -95,13 +95,42 @@ def build_expressions(
     """
     Build expression DAGs for each target object by following CONTRIBUTES_TO edges.
 
+    This function constructs an intermediate representation (IR) of how values flow
+    through operations in the graph. It follows CONTRIBUTES_TO edges backward from
+    target objects (typically sinks) to build a directed acyclic graph (DAG) of
+    expressions.
+
+    The expression DAG represents:
+    - Leaf nodes: Constants (strings, numbers) or symbols (variables)
+    - Internal nodes: Operations (concatenation, addition, etc.)
+    - Choice nodes: Multiple possible expressions (from different execution paths)
+
+    This IR is then encoded to Z3 constraints for solving. The DAG structure allows
+    for efficient constraint generation and enables optimizations like common
+    subexpression elimination.
+
     Args:
-        G: Graph instance.
-        target_obj_ids: Iterable of target object node IDs.
-        contains: Whether sink values should be modeled as "contains" instead of equality.
-                  (The flag is preserved on Symbols for callers to decide how to use it.)
+        G: Graph instance containing the analysis results.
+        target_obj_ids: Iterable of target object node IDs to build expressions for.
+            Typically these are sink objects that reach vulnerable functions.
+        contains: Whether sink values should be modeled as "contains" (substring match)
+            instead of equality. When True, allows finding inputs that produce the
+            desired payload as a substring. Defaults to True.
+
     Returns:
-        dict mapping target obj id -> Expression
+        dict: Mapping from target object ID to Expression DAG. Each Expression
+            represents how the value of that object is computed from source inputs.
+
+    Example:
+        >>> # Build expressions for sink objects
+        >>> expressions = build_expressions(G, [sink_obj1, sink_obj2])
+        >>> # Encode to Z3 and solve
+        >>> for obj_id, expr in expressions.items():
+        ...     solver = z3.Solver()
+        ...     term = encode_to_z3(expr, solver)
+        ...     solver.add(z3.Contains(term, z3.StringVal("payload")))
+        ...     if solver.check() == z3.sat:
+        ...         print("Exploit found:", solver.model())
     """
     memo: Dict[str, Expression] = {}
 
@@ -249,8 +278,36 @@ def encode_to_z3(
     expr: Expression, solver: z3.Solver, cache: Optional[_SymbolCache] = None
 ):
     """
-    Convert an Expression DAG to a z3 term and add necessary constraints.
-    Returns the primary term (string or number) for the expression.
+    Convert an Expression DAG to a Z3 term and add necessary constraints.
+
+    This function recursively traverses the expression DAG and converts it to
+    Z3 constraints. It handles:
+    - Constants: Converted to Z3 constant values
+    - Symbols: Converted to Z3 variables (with type hints)
+    - Operations: Converted to Z3 operations (Concat, Sum, etc.)
+    - Choices: Converted to disjunctions (OR constraints)
+
+    The function maintains a symbol cache to ensure each graph node maps to
+    a single Z3 variable, enabling efficient constraint reuse.
+
+    Args:
+        expr: The Expression DAG root to encode.
+        solver: Z3 solver instance to add constraints to.
+        cache: Optional symbol cache for variable reuse. If None, creates a new cache.
+
+    Returns:
+        z3.ExprRef: The primary Z3 term (string or number) representing the expression.
+            The term can be used in further constraints or queries.
+
+    Example:
+        >>> solver = z3.Solver()
+        >>> expr = Concat(parts=[
+        ...     ConstString(value="prefix"),
+        ...     Symbol(node_id="123", type_hint="string")
+        ... ])
+        >>> term = encode_to_z3(expr, solver)
+        >>> # term represents: Concat("prefix", s123)
+        >>> solver.add(z3.Contains(term, z3.StringVal("payload")))
     """
     cache = cache or _SymbolCache()
     return _encode(expr, solver, cache)[0]

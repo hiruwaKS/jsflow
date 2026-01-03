@@ -19,22 +19,66 @@ class NodeHandleResult:
     """
     Object for storing AST node handling result.
 
+    This class is the primary return type for AST node handlers. It encapsulates
+    all information produced when handling a node during symbolic execution,
+    including:
+    - Object nodes created or referenced
+    - Variable names and name nodes involved
+    - Literal values extracted
+    - Objects used during evaluation
+    - Branch and taint tracking information
+
+    The class is used throughout the analysis to pass results between handlers
+    and to track state during execution. It supports optional printing via
+    the print_callback class variable.
+
     Args:
-        obj_nodes (list, optional): Object nodes. Defaults to [].
-        values (list, optional): Values of the variable or literal (as
-            JavaScript source code, e.g. strings are quoted by quotation
-            marks). Defaults to [].
-        name (str, optional): Variable name. Defaults to None.
-        name_nodes (list, optional): Name nodes. Defaults to [].
-        used_objs (list, optional): Object nodes used in handling the
-            AST node. Definition varies. Defaults to [].
-        from_branches (list, optional): Experimental. Which branches
-            the object nodes come from. Defaults to [].
-        value_tags (list, optional): Experimental. For tags of values.
+        obj_nodes (list, optional): Object nodes created or referenced by this
+            node. These represent JavaScript objects in the object graph.
             Defaults to [].
-        ast_node (optional): AST node ID. If it is not None, results
-            will be printed out. Set the class variable 'print_callback'
-            to customize print format. Defaults to None.
+        values (list, optional): Literal values of the variable or expression
+            (as JavaScript source code, e.g. strings are quoted). Used for
+            constants and literals. Defaults to [].
+        name (str, optional): Variable name if this node represents a variable
+            reference or declaration. Defaults to None.
+        name_nodes (list, optional): Name nodes (variable nodes) involved in
+            this operation. Name nodes connect to object nodes via NAME_TO_OBJ
+            edges. Defaults to [].
+        used_objs (list, optional): Object nodes used during evaluation of this
+            node. This tracks dependencies for data flow analysis. Defaults to [].
+        from_branches (list, optional): Experimental. Branch tags indicating
+            which execution branches these object nodes come from. Used for
+            path-sensitive analysis. Defaults to [].
+        value_tags (list, optional): Experimental. Tags for values, used for
+            tracking value sources or transformations. Defaults to [].
+        ast_node (optional): AST node ID that produced this result. If not None,
+            results will be printed using print_callback. Set the class variable
+            'print_callback' to customize print format. Defaults to None.
+        name_tainted (bool, optional): Whether the variable name itself is
+            tainted (e.g., from user input). Defaults to None.
+        parent_is_proto (bool, optional): Whether the parent object is a
+            prototype. Used for prototype pollution detection. Defaults to None.
+        terminated (bool, optional): Whether execution should terminate after
+            this node (e.g., return, throw). Defaults to None.
+        multi_assign (bool, optional): Whether this is a multi-assignment
+            operation. Defaults to False.
+        tampered_prop (bool, optional): Whether a property was tampered with
+            (for internal property tampering detection). Defaults to False.
+        exit_nodes (list, optional): Control flow exit nodes for this operation.
+            Defaults to False (should be list).
+
+    Example:
+        >>> # Create result for a variable reference
+        >>> result = NodeHandleResult(
+        ...     obj_nodes=[obj1, obj2],
+        ...     name="x",
+        ...     name_nodes=[name_node]
+        ... )
+        >>> # Create result for a literal
+        >>> literal_result = NodeHandleResult(
+        ...     obj_nodes=[string_obj],
+        ...     values=["'hello'"]
+        ... )
     """
 
     @staticmethod
@@ -93,21 +137,47 @@ class NodeHandleResult:
 
 class BranchTag:
     """
-    Class for tagging branches.
+    Class for tagging branches in path-sensitive analysis.
+
+    BranchTag represents a point in the execution where the program can take
+    different paths (e.g., if/else, switch cases, loop iterations). It tracks:
+    - The branching point (which statement)
+    - Which branch was taken
+    - The operation mark (what happened in this branch)
+
+    Branch tags are used throughout the analysis to:
+    - Track which objects exist in which execution paths
+    - Enable path-sensitive data flow analysis
+    - Support branch-aware object copying
+    - Filter objects based on current execution path
+
+    The string representation format is: "{point}#{branch}{mark}"
+    Example: "If123#0A" means "if statement 123, true branch (0), addition (A)"
 
     Args:
-        point (str): ID of the branching point (e.g. if/switch
-            statement).
-        branch (str): Which branch (condition/case in the statement).
-        mark (str): One of the following:
-            Operation mark, 'A' for addition, 'D' for deletion.
-            For-loop mark, 'L' for loop variable, 'P' for parent loop
-                variable, 'C' for other variables created in the loop.
+        point (str): ID of the branching point AST node (e.g., "If123",
+            "Switch456", "For789"). Identifies which conditional/loop statement.
+        branch (str): Which branch was taken. For if statements: "0" for true,
+            "1" for false. For switch: case number. For loops: iteration info.
+        mark (str): Operation mark indicating what happened:
+            - 'A' (Addition): Object was assigned/added in this branch
+            - 'D' (Deletion): Object was removed/not valid in this branch
+            - 'L' (Loop): Object is a loop variable
+            - 'P' (Parent): Object is from parent loop
+            - 'C' (Created): Object was created in this loop iteration
         ---
-        or use this alternative argument:
+        Alternative initialization:
+        s (str/BranchTag): String representation to parse (e.g., "If123#0A"),
+            or another BranchTag to copy. If provided, point/branch/mark are
+            parsed from the string or copied from the tag.
 
-        s (str/BranchTag): String to create the object directly, or copy
-            the existing object.
+    Example:
+        >>> # Create tag for if statement true branch
+        >>> tag = BranchTag(point="If123", branch="0", mark="A")
+        >>> # Parse from string
+        >>> tag2 = BranchTag("If123#0A")
+        >>> # Use in branch container
+        >>> branches = BranchTagContainer([tag])
     """
 
     def __init__(self, s=None, **kwargs):

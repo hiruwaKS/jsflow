@@ -135,25 +135,52 @@ def do_vul_checking(G, rule_list, pathes):
     is considered vulnerable if it satisfies ALL rules in the rule_list.
     Each rule is a tuple of (rule_function_name, rule_arguments).
 
+    The function works by:
+    1. Creating TraceRule objects for each rule in the rule_list
+    2. For each candidate path, checking all rules in sequence
+    3. If any rule fails, the path is rejected
+    4. Only paths that pass all rules are returned
+
+    Common rule types:
+    - 'has_user_input': Checks if path contains tainted user input
+    - 'not_exist_func': Checks that specified functions don't appear in path
+    - 'exist_func': Checks that specified functions appear in path
+    - 'end_with_func': Checks that path ends at a specific function call
+    - 'start_with_func': Checks that path starts at a specific function
+    - 'start_within_file': Checks that path starts in a specific file
+    - 'not_start_within_file': Checks that path doesn't start in specific files
+
     Args:
         G (Graph): The graph object containing the analysis results
         rule_list (list): List of rule tuples. Each tuple contains:
-            - rule_function_name (str): Name of the trace rule function
-            - rule_arguments: Arguments for the rule function (can be None)
+            - rule_function_name (str): Name of the trace rule function.
+              Must match a method name in TraceRule class.
+            - rule_arguments: Arguments for the rule function. Can be:
+              - None: No arguments needed
+              - list: List of function names, file names, or variable names
+              - Other types as required by specific rules
         pathes (list): List of candidate paths to check. Each path is a
-            list of node IDs.
+            list of node IDs representing an execution path through the graph.
 
     Returns:
         list: List of paths that satisfy all rules in rule_list. Each path
-            is a list of node IDs.
+            is a list of node IDs. Empty list if no paths satisfy all rules.
 
     Example:
+        >>> # Check for OS command injection: user input reaching exec without sanitization
         >>> rule_list = [
-        ...     ('has_user_input', None),
-        ...     ('not_exist_func', ['parseInt']),
-        ...     ('end_with_func', ['sink_hqbpillvul_exec'])
+        ...     ('has_user_input', None),  # Path must contain user input
+        ...     ('not_exist_func', ['parseInt']),  # No parseInt sanitization
+        ...     ('end_with_func', ['sink_hqbpillvul_exec'])  # Ends at exec()
         ... ]
         >>> vulnerable = do_vul_checking(G, rule_list, candidate_paths)
+        >>> # Check for XSS: user input reaching HTTP write without sanitization
+        >>> xss_rules = [
+        ...     ('has_user_input', None),
+        ...     ('not_exist_func', ['parseInt']),
+        ...     ('end_with_func', ['sink_hqbpillvul_http_write'])
+        ... ]
+        >>> xss_paths = do_vul_checking(G, xss_rules, paths)
     """
     trace_rules = []
     for rule in rule_list:
@@ -184,25 +211,47 @@ def vul_checking(G, pathes, vul_type):
     - Presence of vulnerable sink functions
     - Path characteristics specific to each vulnerability type
 
+    The function uses a rule-based approach where each vulnerability type has
+    one or more rule lists. A path is considered vulnerable if it satisfies
+    ALL rules in at least one rule list. This allows for multiple patterns
+    to be detected for the same vulnerability type.
+
+    Rule evaluation:
+    - Rules are applied in order within each rule list
+    - All rules in a list must pass for the path to be vulnerable
+    - If any rule fails, the next rule list is tried
+    - A path is added to results if it satisfies any complete rule list
+
     Args:
         G (Graph): The graph object containing the analysis results
-        pathes (list): List of candidate paths (sequences of node IDs) to check
+        pathes (list): List of candidate paths (sequences of node IDs) to check.
+            Each path represents a potential data flow from source to sink.
         vul_type (str): Type of vulnerability to check. Must be one of:
-            - 'xss': Cross-site scripting
-            - 'os_command': OS command injection
-            - 'code_exec': Code execution vulnerabilities
-            - 'proto_pollution': Prototype pollution
-            - 'path_traversal': Path traversal
-            - 'nosql': NoSQL injection
+            - 'xss': Cross-site scripting - checks for unsanitized user input
+              reaching HTTP response writing functions
+            - 'os_command': OS command injection - checks for user input reaching
+              command execution functions (exec, spawn, etc.)
+            - 'code_exec': Code execution vulnerabilities - checks for user input
+              reaching eval(), Function(), or command execution
+            - 'proto_pollution': Prototype pollution - checks for tainted property
+              names being assigned to prototype chains
+            - 'path_traversal': Path traversal - checks for URL parameters reaching
+              file system operations without sanitization
+            - 'nosql': NoSQL injection - checks for user input reaching MongoDB
+              query functions without sanitization
 
     Returns:
         list: List of paths that satisfy the vulnerability detection rules.
-            Each path is a list of node IDs representing the vulnerable execution path.
+            Each path is a list of node IDs representing the vulnerable execution
+            path from source to sink. Empty list if no vulnerable paths found.
 
     Example:
         >>> from jsflow.vul_checking import vul_checking
+        >>> # Check for XSS vulnerabilities
         >>> vulnerable_paths = vul_checking(G, candidate_paths, 'xss')
         >>> print(f"Found {len(vulnerable_paths)} XSS vulnerabilities")
+        >>> # Check for OS command injection
+        >>> cmd_paths = vul_checking(G, paths, 'os_command')
     """
     xss_rule_lists = [
         [

@@ -128,27 +128,71 @@ def convert_prop_names_to_wildcard(
 def copy_objs_for_branch(
     G: Graph, handle_result: NodeHandleResult, branch, ast_node=None, deep=True
 ) -> NodeHandleResult:
+    """
+    Copy objects for branch-aware analysis when entering a conditional branch.
+
+    When execution enters a conditional branch (if/switch), objects that are
+    assigned in that branch need to be copied to maintain separate state for
+    each execution path. This function:
+    1. Identifies objects that need copying (assigned in different branches)
+    2. Creates copies of those objects
+    3. Updates edges to track which objects exist in which branches
+
+    The branch tracking uses edge marks:
+    - 'A' (Addition): Object is assigned in this branch
+    - 'D' (Deletion): Object was assigned in another branch, not valid here
+
+    This enables path-sensitive analysis where different branches can have
+    different object states.
+
+    Args:
+        G: Graph instance.
+        handle_result: NodeHandleResult containing objects and name nodes to process.
+        branch: BranchTag representing the current branch being entered.
+        ast_node: Optional AST node for the copy operation (for tracking).
+        deep: If True, recursively copy nested object properties. If False,
+            only copy top-level object structure. Defaults to True.
+
+    Returns:
+        NodeHandleResult: Updated result with copied objects. Objects that
+            didn't need copying are included as-is.
+
+    Example:
+        >>> # Entering if branch
+        >>> branch = BranchTag(point="If123", branch="0")
+        >>> result = copy_objs_for_branch(G, handle_result, branch)
+        >>> # result.obj_nodes now contains copies for branch-specific objects
+    """
     returned_objs = []
     for obj in handle_result.obj_nodes:
         copied_obj = None
+        # Check all name nodes that reference this object
         for e in G.get_in_edges(obj, edge_type="NAME_TO_OBJ"):
             name_node, _, _, data = e
             eb = data.get("branch")
+            
+            # Object needs copying if:
+            # 1. It's referenced by a name node in our result, AND
+            # 2. Either it has no branch tag (exists in all paths) OR
+            #    it belongs to a different branch of the same branching point
             if name_node in handle_result.name_nodes and (
                 eb is None or (eb.point == branch.point and eb.branch != branch.branch)
             ):
-                if copied_obj is None:  # the object should be copied only once
+                if copied_obj is None:  # Copy only once per object
                     copied_obj = G.copy_obj(obj, ast_node, deep=deep)
                     returned_objs.append(copied_obj)
-                # assign the name node to the copied object and mark the
-                # previous edge as deleted (D)
+                
+                # Update edges to track branch state:
+                # - Add edge to copied object with 'A' mark (added in this branch)
+                # - Add edge to original object with 'D' mark (deleted in this branch)
                 edge_attr_a = dict(data)
                 edge_attr_a["branch"] = BranchTag(branch, mark="A")
                 edge_attr_d = dict(data)
                 edge_attr_d["branch"] = BranchTag(branch, mark="D")
                 G.add_edge(name_node, copied_obj, edge_attr_a)
                 G.add_edge(name_node, obj, edge_attr_d)
-        if copied_obj is None:  # if the object is not copied, return it
+        
+        if copied_obj is None:  # Object didn't need copying - use original
             returned_objs.append(obj)
 
     return NodeHandleResult(

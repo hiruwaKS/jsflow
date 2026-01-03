@@ -1288,65 +1288,102 @@ class Graph:
 
     def get_objs_by_name_node(self, name_node, branches=None):
         """
-        Get corresponding object nodes of a name node.
+        Get corresponding object nodes of a name node, with branch-aware filtering.
+
+        This function retrieves all object nodes associated with a name node (variable).
+        When branch information is provided, it filters objects based on the current
+        execution path, handling:
+        - Objects assigned in specific branches (marked with 'A' for addition)
+        - Objects removed in specific branches (marked with 'D' for deletion)
+        - Loop variables that are scoped to specific loop iterations
+        - Objects that exist across all branches (no branch tag)
+
+        The branch filtering works by:
+        1. Starting with objects that have no branch tag (exist in all paths)
+        2. Iterating through branch history from oldest to newest
+        3. Applying branch-specific additions/deletions based on tag marks
+        4. Excluding objects from other loop iterations
 
         Args:
-            name_node: the name node.
-            branches (BranchTagContainer, optional): branch information.
-                Default to None.
+            name_node: The name node (variable) to look up objects for.
+            branches (BranchTagContainer, optional): Branch information representing
+                the current execution path. Each branch tag contains:
+                - point: The branching point (e.g., "If123", "For456")
+                - branch: Which branch was taken (e.g., "0" for true, "1" for false)
+                - mark: Operation mark ('A' for addition, 'D' for deletion, 'L' for loop)
+                Defaults to None, in which case all objects are returned.
 
         Returns:
-            list: list of object nodes.
+            list: List of object nodes that are valid in the current branch context.
+                If branches is None, returns all objects associated with the name node.
+
+        Example:
+            >>> # Get objects for variable 'x' in the current branch
+            >>> objs = G.get_objs_by_name_node(name_node, branches=current_branches)
+            >>> # Get all objects for variable 'x' regardless of branch
+            >>> all_objs = G.get_objs_by_name_node(name_node)
         """
         if name_node is None:
             return []
+        # Get all edges from name node to object nodes
         out_edges = self.get_out_edges(name_node, edge_type="NAME_TO_OBJ")
         objs = set([edge[1] for edge in out_edges])
+        
         if branches:
-            # initiate a dictionary that records if the object exists in the current branch
+            # Track which objects are valid in the current branch context
+            # has_obj[obj] = True means the object exists in current execution path
             has_obj = {}
             for obj in objs:
                 has_obj[obj] = False
-            # check edges without branch tag
+            
+            # First, mark objects without branch tags as valid (they exist in all paths)
+            # These are objects assigned outside of conditional branches
             for _, obj, _, attr in self.get_out_edges(
                 name_node, edge_type="NAME_TO_OBJ"
             ):
                 branch_tag = attr.get("branch")
-                for_tags = self.get_node_attr(obj).get("for_tags")
                 if branch_tag is None:
+                    # No branch tag means this object exists in all execution paths
                     has_obj[obj] = True
-            # for each branch in branch history
-            # we check from the oldest (shallowest) to the most recent (deepest)
+            
+            # Process branch history from oldest (outermost) to newest (innermost)
+            # This ensures that nested branches properly override outer branch decisions
             for branch in branches:
-                # check which edge matches the current checking branch
+                # Check all edges to see if they match the current branch
                 for _, obj, _, attr in self.get_out_edges(
                     name_node, edge_type="NAME_TO_OBJ"
                 ):
                     tag = attr.get("branch")
+                    # Match if the tag's branching point and branch number match
                     if (
                         tag
                         and tag.point == branch.point
                         and tag.branch == branch.branch
                     ):
                         if tag.mark == "A":
-                            # if the object is added (assigned) in that branch
+                            # Object was added (assigned) in this branch
                             has_obj[obj] = True
                         elif tag.mark == "D":
-                            # if the object is removed in that branch
+                            # Object was deleted (removed) in this branch
                             has_obj[obj] = False
+                    
+                    # Check for loop variable scoping
+                    # Objects created in a different loop iteration should be excluded
                     for tag in self.get_node_attr(obj).get("for_tags", []):
                         if tag.point == branch.point:
                             if (
                                 branch.branch is not None
                                 and tag.branch != branch.branch
                             ):
-                                # if the object is used as the loop variable
-                                # or created in another branch of that
-                                # branching point
+                                # Object belongs to a different loop iteration
+                                # Exclude it from current path
                                 has_obj[obj] = False
                                 break
+            
+            # Return only objects that are valid in the current branch
             return list(filter(lambda x: has_obj[x], objs))
         else:
+            # No branch filtering: return all objects
             return list(objs)
 
     get_obj_nodes = get_objs_by_name_node
@@ -1475,41 +1512,65 @@ class Graph:
         self, name_node, obj_nodes, multi=False, branches=BranchTagContainer()
     ):
         """
-        Assign (multiple) object nodes to a name node.
+        Assign (multiple) object nodes to a name node with branch-aware tracking.
+
+        This function handles variable assignment in the object graph, supporting:
+        - Single vs. multiple assignment modes
+        - Branch-aware assignment tracking (for conditional branches)
+        - Proper cleanup of previous assignments when not in multi mode
+
+        When not in multi mode and a branch is active:
+        - Previous assignments in the current branch are removed
+        - Previous assignments from other branches are marked as deleted (D)
+        - New assignments are marked as added (A) in the current branch
+
+        This allows the graph to track which objects are valid in which execution
+        paths, enabling accurate path-sensitive analysis.
 
         Args:
-            name_node: where to put the objects.
-            obj_nodes: objects to be assigned.
-            multi (bool, optional):
-                True: do NOT delete edges.
-                False: delete existing edges.
-                Defaults to False.
-            branches (List[BranchTag], optional):
-                List of branch tags. Defaults to [].
+            name_node: The name node (variable) to assign objects to.
+            obj_nodes: List of object nodes to assign to the name node.
+            multi (bool, optional): If True, keep existing edges (multi-assignment).
+                If False, replace existing assignments. Defaults to False.
+            branches (BranchTagContainer, optional): Current branch context.
+                Used to tag assignments with branch information. Defaults to empty.
+
+        Example:
+            >>> # Assign object to variable in a branch
+            >>> G.assign_obj_nodes_to_name_node(name_node, [obj], branches=branches)
+            >>> # Multi-assignment (keep existing)
+            >>> G.assign_obj_nodes_to_name_node(name_node, [obj1, obj2], multi=True)
         """
+        # Get the last choice branch (if/switch) to tag this assignment
         branch = branches.get_last_choice_tag()
-        # remove previous objects
+        
+        # Get objects currently assigned to this name node in the current branch context
         pre_objs = self.get_objs_by_name_node(name_node, branches)
         self.logger.debug(
             f"Assigning {obj_nodes} to {name_node}, "
             f"pre_objs={pre_objs}, branches={branches}"
         )
+        
+        # Handle cleanup of previous assignments if not in multi mode
         if pre_objs and not multi:
             for obj in pre_objs:
                 if branch:
-                    # check if any addition (assignment) exists
-                    # in current branch
+                    # We're in a branch context - need to handle branch-aware cleanup
+                    # Check if this object was added in the current branch
                     flag = False
                     for key, edge_attr in self.get_edges_between(
                         name_node, obj, "NAME_TO_OBJ"
                     ).items():
                         tag = edge_attr.get("branch", BranchTag())
                         if tag == BranchTag(branch, mark="A"):
-                            # if addition exists, delete the addition edge
+                            # Object was added in current branch - remove that edge
                             self.graph.remove_edge(name_node, obj, key)
                             flag = True
+                    
                     if not flag:
-                        # if no addition, add a deletion edge
+                        # Object wasn't added in current branch, so mark it as deleted
+                        # This preserves the object for other branches while indicating
+                        # it's not valid in the current branch
                         self.add_edge(
                             name_node,
                             obj,
@@ -1521,19 +1582,25 @@ class Graph:
                         if self.affected_name_nodes:
                             self.affected_name_nodes[-1].add(name_node)
                 else:
-                    # do not use "remove_edge", which cannot remove all edges
+                    # No branch context - remove all edges to previous objects
+                    # This is a simple replacement assignment
                     self.remove_all_edges_between(name_node, obj)
                     self.logger.debug("  Remove " + obj)
-        # add new objects to name node
+        
+        # Add new objects to the name node
         for obj in obj_nodes:
             if branch:
+                # Tag the assignment with branch information (mark="A" for addition)
                 self.add_edge(
                     name_node,
                     obj,
                     {"type:TYPE": "NAME_TO_OBJ", "branch": BranchTag(branch, mark="A")},
                 )
             else:
+                # No branch context - simple assignment
                 self.add_edge(name_node, obj, {"type:TYPE": "NAME_TO_OBJ"})
+            
+            # Track this name node as affected (for optimization purposes)
             if self.affected_name_nodes:
                 self.affected_name_nodes[-1].add(name_node)
 
@@ -2150,14 +2217,39 @@ class Graph:
         self, source=None, edge_type="OBJ_REACHES", depth_limit=None, sinks=[]
     ):
         """
-        dfs a specific type of edge upper from a node id
+        Perform depth-first search upward through edges of a specific type.
+
+        This function traverses the graph backward (following incoming edges) from
+        a source node, collecting all paths that follow edges of the specified type.
+        It's commonly used for:
+        - Data flow analysis: finding where data comes from (OBJ_REACHES)
+        - Control flow analysis: finding predecessor statements (FLOWS_TO)
+        - Vulnerability detection: tracing from sinks back to sources
+
+        The search stops when:
+        - A sink node is reached (if sinks are specified)
+        - The depth limit is exceeded
+        - No more edges of the specified type are found
 
         Args:
-            node_id: the start node id
-            edge_types: we only consider some types of edge types
-        Return:
-            nodes: list, nodes on the pathes
-            objs: dict, the objs on the edge, {str(from_to): [obj numbers]}
+            source: The starting node ID. If None, returns empty paths.
+            edge_type (str): Type of edges to follow (e.g., "OBJ_REACHES", "FLOWS_TO").
+                Defaults to "OBJ_REACHES".
+            depth_limit (int, optional): Maximum depth to search. If None, searches
+                until no more edges are found. Defaults to None.
+            sinks (list, optional): List of sink node IDs. When reached, the path
+                is added to results and search stops. Defaults to [].
+
+        Returns:
+            list: List of paths, where each path is a list of node IDs from source
+                to a terminal node (sink or leaf). Paths are sorted by length
+                (longest first).
+
+        Example:
+            >>> # Find all data flow paths to a sink
+            >>> paths = G._dfs_upper_by_edge_type(sink_node, "OBJ_REACHES", sinks=[source_node])
+            >>> # Find control flow predecessors
+            >>> cf_paths = G._dfs_upper_by_edge_type(stmt_node, "FLOWS_TO")
         """
         start_time = time.time()
         G = self.graph
