@@ -340,7 +340,7 @@ class BranchTagContainer(list):
             mark = tag.mark
         for i, t in enumerate(self):
             if t.point == point and t.branch == branch:
-                if mark and t.mark == mark:
+                if mark is None or t.mark == mark:
                     return i, t
         return None, None
 
