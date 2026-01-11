@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 # --- Expression IR ---------------------------------------------------------
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Expression:
     """Base expression class."""
     tainted: bool = False
@@ -190,8 +190,13 @@ def _group_contributors(in_edges) -> Dict[Tuple[str, str], List[Tuple[str, int]]
     grouped: Dict[Tuple[str, str], List[Tuple[str, int]]] = {}
     for src, _dst, data in in_edges:
         opt = data.get("opt")
-        if not opt or len(opt) < 3:
+        if not opt:
             key = ("unknown", "none")
+            idx = len(grouped.get(key, []))
+        elif len(opt) < 3:
+            op = opt[0] if len(opt) >= 1 and opt[0] else "unknown"
+            group = opt[1] if len(opt) >= 2 and opt[1] else "none"
+            key = (op, group)
             idx = len(grouped.get(key, []))
         else:
             op, group, idx = opt[0], opt[1], opt[2]

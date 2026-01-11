@@ -56,12 +56,15 @@ def get_file_list(module_name):
     )
     stdout, stderr = proc.communicate(script)
     file_list = []
-    for match in re.finditer(
-        r"^[\u001b\[\w]*Analyzing ([^\u001b]*)[\u001b\[\w]*$",
-        stderr,
-        flags=re.MULTILINE,
-    ):
-        file_path = match.group(1)
-        if file_path != "stdin":
-            file_list.append(file_path)
+    for line in stderr.splitlines():
+        # Strip ANSI color codes and surrounding markers.
+        clean = re.sub(r"\x1b\[[0-9;]*m", "", line).strip()
+        if clean.startswith("["):
+            clean = clean[1:].strip()
+        if clean.endswith("]"):
+            clean = clean[:-1].strip()
+        if clean.startswith("Analyzing "):
+            file_path = clean[len("Analyzing ") :].strip()
+            if file_path != "stdin":
+                file_list.append(file_path)
     return file_list

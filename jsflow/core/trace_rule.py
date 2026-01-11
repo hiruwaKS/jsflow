@@ -147,12 +147,11 @@ class TraceRuleNew(TraceRuleInterface):
         """
         start_node = path[0]
 
-        file_name = self.graph.get_node_file_path(start_node)
-        cur_node = self.graph.get_node_attr(start_node)
-        if file_name is None:
+        file_path = self.graph.get_node_file_path(start_node)
+        if file_path is None:
             return False
-        file_name = file_name if "/" not in file_name else file_name.split("/")[-1]
-        return file_name in file_names
+        file_base = file_path if "/" not in file_path else file_path.split("/")[-1]
+        return file_path in file_names or file_base in file_names
 
     def start_with_var(self, var_names, path):
         # TODO: not finished, need to update the var name finding algorithm
@@ -186,6 +185,9 @@ class TraceRuleNew(TraceRuleInterface):
         """
         pre_node = None
         for node in path:
+            node_name = self.graph.get_name_from_child(node)
+            if node_name and node_name.startswith("OPGen_TAINTED_VAR"):
+                return True
             if not pre_node:
                 pre_node = node
                 continue
@@ -260,6 +262,24 @@ class TraceRuleOld(TraceRuleInterface):
         self.value = value
         self.graph = G
 
+    def _iter_called_funcs(self, node):
+        call_types = {"AST_CALL", "AST_METHOD_CALL", "AST_NEW"}
+        names = []
+        node_attr = self.graph.get_node_attr(node)
+        if node_attr.get("type") in call_types:
+            for child in self.graph.get_all_child_nodes(node):
+                name = self.graph.get_name_from_child(child)
+                if name:
+                    names.append(name)
+        # Some graphs store call nodes as children; include those too.
+        for child in self.graph.get_all_child_nodes(node):
+            child_attr = self.graph.get_node_attr(child)
+            if child_attr.get("type") in call_types:
+                name = self.graph.get_name_from_child(child)
+                if name:
+                    names.append(name)
+        return names
+
     def exist_func(self, func_names, path):
         """
         check whether in the path, all functions within {func_names} exists
@@ -273,16 +293,7 @@ class TraceRuleOld(TraceRuleInterface):
         """
         called_func_list = set()
         for node in path:
-            childern = self.graph.get_all_child_nodes(node)
-            for child in childern:
-                cur_node = self.graph.get_node_attr(child)
-                if "type" in cur_node:
-                    if (
-                        cur_node["type"] == "AST_CALL"
-                        or cur_node["type"] == "AST_METHOD_CALL"
-                    ):
-                        cur_func = self.graph.get_name_from_child(child)
-                        called_func_list.add(cur_func)
+            called_func_list.update(self._iter_called_funcs(node))
 
         # print("@@@@@@@@ CALLED FUNCTIONS", called_func_list)
 
@@ -310,19 +321,9 @@ class TraceRuleOld(TraceRuleInterface):
         """
         start_node = path[0]
 
-        childern = self.graph.get_all_child_nodes(start_node)
-        for child in childern:
-            cur_node = self.graph.get_node_attr(child)
-            if "type" in cur_node:
-                if (
-                    cur_node["type"] == "AST_CALL"
-                    or cur_node["type"] == "AST_METHOD_CALL"
-                ):
-                    cur_func = self.graph.get_name_from_child(child)
-                    if cur_func not in func_names:
-                        # if not current, maybe inside the call there is another call
-                        continue
-                    return cur_func in func_names
+        for cur_func in self._iter_called_funcs(start_node):
+            if cur_func in func_names:
+                return True
         return False
 
     def not_start_with_func(self, func_names, path):
@@ -361,19 +362,10 @@ class TraceRuleOld(TraceRuleInterface):
         """
         end_node = path[-1]
 
-        childern = self.graph.get_all_child_nodes(end_node)
-        for child in childern:
-            cur_node = self.graph.get_node_attr(child)
-            if "type" in cur_node:
-                if (
-                    cur_node["type"] == "AST_CALL"
-                    or cur_node["type"] == "AST_METHOD_CALL"
-                ):
-                    cur_func = self.graph.get_name_from_child(child)
-                    if cur_func not in func_names:
-                        # if not current, maybe inside the call there is another call
-                        continue
-                    return cur_func in func_names
+        for cur_func in self._iter_called_funcs(end_node):
+            if cur_func in func_names:
+                return True
+        return False
 
     def start_within_file(self, file_names, path):
         """
@@ -386,12 +378,11 @@ class TraceRuleOld(TraceRuleInterface):
         """
         start_node = path[0]
 
-        file_name = self.graph.get_node_file_path(start_node)
-        cur_node = self.graph.get_node_attr(start_node)
-        if file_name is None:
+        file_path = self.graph.get_node_file_path(start_node)
+        if file_path is None:
             return False
-        file_name = file_name if "/" not in file_name else file_name.split("/")[-1]
-        return file_name in file_names
+        file_base = file_path if "/" not in file_path else file_path.split("/")[-1]
+        return file_path in file_names or file_base in file_names
 
     def start_with_var(self, var_names, path):
         # TODO: not finished, need to update the var name finding algorithm
@@ -425,6 +416,9 @@ class TraceRuleOld(TraceRuleInterface):
         """
         pre_node = None
         for node in path:
+            node_name = self.graph.get_name_from_child(node)
+            if node_name and node_name.startswith("OPGen_TAINTED_VAR"):
+                return True
             if not pre_node:
                 pre_node = node
                 continue
