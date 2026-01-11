@@ -7,8 +7,12 @@ import os
 import subprocess
 import re
 
-main_js_path = os.path.realpath(os.path.join(__file__, "../../esprima-csv/main.js"))
-search_js_path = os.path.realpath(os.path.join(__file__, "../../esprima-csv/search.js"))
+main_js_path = os.path.realpath(
+    os.path.join(os.path.dirname(__file__), "../../esprima-csv/main.js")
+)
+search_js_path = os.path.realpath(
+    os.path.join(os.path.dirname(__file__), "../../esprima-csv/search.js")
+)
 
 
 def esprima_parse(path="-", args=[], input=None, print_func=print):

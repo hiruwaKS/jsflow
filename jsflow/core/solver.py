@@ -9,7 +9,7 @@ the derived equations (strings, numbers, or mixed types).
 
 from . import opgen
 from .graph import Graph
-from .utilities import wildcard
+from ..utils.utilities import wildcard
 from collections import defaultdict
 from functools import reduce
 from operator import add
@@ -140,7 +140,7 @@ def solve2(G: Graph, final_objs, initial_objs=None, contains=True):
                     solver.add(s.number() == v)
         return symbols[obj]
 
-        for final_obj in final_objs:
+    for final_obj in final_objs:
         # Temporarily modify the sink object to represent the desired exploit value
         # This allows the solver to work backward to find inputs that produce this value
         original_type = G.get_node_attr(final_obj).get("type")

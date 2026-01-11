@@ -8,7 +8,7 @@ wildcard handling) and branch-aware copy helpers.
 import math
 from typing import List
 
-from .graph import Graph
+from ..core.graph import Graph
 from .utilities import NodeHandleResult, BranchTag
 from .utilities import wildcard, undefined
 

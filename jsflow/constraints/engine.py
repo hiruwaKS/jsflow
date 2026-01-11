@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Tuple
 
 import z3
 
-from ..utilities import wildcard
+from ..utils.utilities import wildcard
 
 logger = logging.getLogger(__name__)
 

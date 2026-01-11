@@ -1,6 +1,6 @@
 import unittest
 
-from jsflow.vul_checking import do_vul_checking, vul_checking
+from jsflow.vuln.vul_checking import do_vul_checking, vul_checking
 from tests.units.vul_checking_fakes import FakeGraph
 
 

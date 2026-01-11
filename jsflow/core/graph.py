@@ -15,9 +15,9 @@ import io
 import logging
 import json
 from typing import DefaultDict, List, Callable
-from .utilities import BranchTag, BranchTagContainer, DictCounter
-from .utilities import _SpecialValue, wildcard
-from .logger import *
+from ..utils.utilities import BranchTag, BranchTagContainer, DictCounter
+from ..utils.utilities import _SpecialValue, wildcard
+from ..utils.logger import *
 import uuid
 from itertools import chain
 from collections import defaultdict, deque

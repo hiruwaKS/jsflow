@@ -15,17 +15,17 @@ from typing import Tuple
 import sty
 
 from .graph import Graph
-from .utilities import NodeHandleResult, ExtraInfo
-from .utilities import BranchTag, BranchTagContainer, get_random_hex
-from .logger import create_logger, ATTENTION
-from . import modeled_js_builtins, modeled_builtin_modules
-from .helpers import val_to_str, val_to_float
-from .helpers import wildcard, undefined, is_wildcard_obj
-from .helpers2 import *
+from ..utils.utilities import NodeHandleResult, ExtraInfo
+from ..utils.utilities import BranchTag, BranchTagContainer, get_random_hex
+from ..utils.logger import create_logger, ATTENTION
+from ..models import modeled_js_builtins, modeled_builtin_modules
+from ..utils.helpers import val_to_str, val_to_float
+from ..utils.helpers import wildcard, undefined, is_wildcard_obj
+from ..utils.helpers2 import *
 from .esprima import esprima_parse, esprima_search
 from . import solver
-from .vul_checking import *
-from .vul_func_lists import signature_lists
+from ..vuln.vul_checking import *
+from ..vuln.vul_func_lists import signature_lists
 
 registered_func = {}
 

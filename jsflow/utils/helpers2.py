@@ -7,10 +7,10 @@ between object nodes and literal values, and wiring CONTRIBUTES_TO edges to
 explain how data flows through expressions.
 """
 
-from .graph import Graph
+from ..core.graph import Graph
 from .utilities import NodeHandleResult, ExtraInfo, get_random_hex
 from .utilities import ConditionTag
-from . import opgen
+from ..core import opgen
 from .helpers import val_to_str, val_to_float
 from .helpers import js_cmp, wildcard, undefined
 from .logger import *

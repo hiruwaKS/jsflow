@@ -35,6 +35,21 @@ Example:
 """
 
 __version__ = "1.0.0"
+
+# Import submodules to maintain backward compatibility and API structure
+from .core import graph
+from .core import opgen
+from .core import trace_rule
+from .core import solver
+from .utils import logger
+from .utils import helpers
+from .utils import utilities
+from .vuln import vul_checking
+from . import launcher
+
+# Expose commonly used classes directly
+from .core.graph import Graph
+
 __all__ = [
     "Graph",
     "launcher",

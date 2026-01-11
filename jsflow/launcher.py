@@ -11,14 +11,14 @@ from datetime import datetime
 
 import sty
 
-from .graph import Graph
-from .logger import create_logger, ATTENTION
-from .opgen import (
+from .core.graph import Graph
+from .utils.logger import create_logger, ATTENTION
+from .core.opgen import (
     analyze_files,
     analyze_string,
     generate_obj_graph,
 )
-from .vul_checking import traceback, vul_checking, get_path_text
+from .vuln.vul_checking import traceback, vul_checking, get_path_text
 
 
 def setup_log_directory():
@@ -327,7 +327,7 @@ def main():
             raise argparse.ArgumentTypeError("CSV cannot be used with module mode")
         # analyze from CSVs
         G.import_from_CSV("./nodes.csv", "./rels.csv")
-            generate_obj_graph(G, "0")
+        generate_obj_graph(G, "0")
     total_num_stat = G.get_total_num_statements()
     print("Statements:", len(G.covered_stat), total_num_stat)
     print("Functions:", len(G.covered_func), G.get_total_num_functions())

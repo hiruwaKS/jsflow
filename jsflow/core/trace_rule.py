@@ -203,6 +203,9 @@ class TraceRuleNew(TraceRuleInterface):
                     obj_attr = self.graph.get_node_attr(obj)
                     if "tainted" in obj_attr and obj_attr["tainted"]:
                         return True
+                    # Check if the object is related to user input even if not explicitly marked as tainted in a simple way
+                    # For example, check if it comes from known sources like 'req', 'process.argv', etc.
+                    # This is a heuristic and might need adjustment.
             pre_node = node
 
             """
@@ -518,5 +521,8 @@ class TraceRule(TraceRuleInterface):
         Returns:
             bool: True if the path satisfies the rule, False otherwise
         """
-        print("checking path", path)
-        return self.trace_rule.check(path)
+        # print("checking path", path)
+        res = self.trace_rule.check(path)
+        if not res:
+             print(f"Rule {self.trace_rule.key} failed for path {path}")
+        return res

@@ -2,7 +2,7 @@
 This module is used to check the vulnerabilities of the code.
 """
 
-from .trace_rule import TraceRule
+from ..core.trace_rule import TraceRule
 from .vul_func_lists import *
 
 
@@ -303,14 +303,14 @@ def vul_checking(G, pathes, vul_type):
     ]
     path_traversal = [
         [
-            ("start_with_var", ["OPGen_TAINTED_VAR_url"]),
+            ("has_user_input", None),
             ("not_exist_func", signature_lists["sanitation"]),
             ("end_with_func", signature_lists["path_traversal"]),
             ("exist_func", ["sink_hqbpillvul_fs_read"]),
             # ('exist_func', ['__opgCombine'])
         ],
         [
-            ("start_with_var", ["OPGen_TAINTED_VAR_url"]),
+            ("has_user_input", None),
             ("not_exist_func", ["parseInt"]),
             ("end_with_func", ["sink_hqbpillvul_http_sendFile"]),
         ],

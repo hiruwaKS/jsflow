@@ -60,13 +60,13 @@ Compared to existing work on LLM-generated taint specifications (e.g., CodeQL ru
 
 ### 1. Executable Stubs vs. Declarative Rules
 - **Existing work**: Generates declarative taint specifications (e.g., CodeQL `.ql` files) that define sources, sinks, and sanitizers as rules
-- **Our approach**: Generates **executable JavaScript stub code** that preserves full API signatures and can be analyzed by symbolic execution engines
+- **Our approach**: Generates **executable JavaScript stub code** that preserves full API signatures and can be analyzed by static analysis engines
 - **Benefit**: Stubs integrate seamlessly into the analysis pipeline as drop-in replacements for real libraries
 
 ### 2. Inline Data Flow Markers
 - **Existing work**: Taint specifications are separate from code, using pattern matching
 - **Our approach**: Data flow markers (`source_hqbpillvul_*`, `sink_hqbpillvul_*`) are **embedded directly in the code flow**
-- **Benefit**: Enables precise tracking of data flow through stub implementations during symbolic execution
+- **Benefit**: Enables precise tracking of data flow through stub implementations during static analysis
 
 ### 3. JavaScript-Specific Challenges
 - **Callback handling**: JavaScript's callback-heavy nature requires stubs to properly simulate callback invocations with marked data
@@ -74,10 +74,10 @@ Compared to existing work on LLM-generated taint specifications (e.g., CodeQL ru
 - **Dynamic exports**: Support for CommonJS `module.exports` patterns and dynamic property assignment
 - **Benefit**: Addresses language-specific patterns that declarative rules struggle with
 
-### 4. Symbolic Execution Integration
+### 4. Graph-Based Static Analysis Integration
 - **Existing work**: CodeQL uses pattern-based matching on AST
-- **Our approach**: Stubs are analyzed by **symbolic execution**, allowing path-sensitive analysis and constraint solving
-- **Benefit**: Can track complex data flow paths that pattern matching might miss
+- **Our approach**: Stubs are analyzed by **static analysis with graph-based data flow tracking**, building Object Property Graphs (OPG) that enable path-sensitive analysis and constraint solving
+- **Benefit**: Can track complex data flow paths through the graph structure that pattern matching might miss
 
 ### 5. API Signature Preservation
 - **Existing work**: Taint specs focus on identifying sources/sinks, not maintaining API compatibility

@@ -2,28 +2,28 @@
 This module is used to model the built-in functions and objects of JavaScript.
 """
 
-from .graph import Graph
-from .utilities import (
+from ..core.graph import Graph
+from ..utils.utilities import (
     NodeHandleResult,
     BranchTag,
     BranchTagContainer,
     ExtraInfo,
     get_random_hex,
 )
-from .utilities import wildcard
-from . import opgen
-from .helpers import val_to_str, is_int
-from .helpers import convert_prop_names_to_wildcard
-from .helpers import copy_objs_for_branch, copy_objs_for_parameters
-from .helpers import to_python_array, to_og_array
+from ..utils.utilities import wildcard
+from ..core import opgen
+from ..utils.helpers import val_to_str, is_int
+from ..utils.helpers import convert_prop_names_to_wildcard
+from ..utils.helpers import copy_objs_for_branch, copy_objs_for_parameters
+from ..utils.helpers import to_python_array, to_og_array
 
-# from .helpers import add_contributes_to # don't import this version
-from .helpers2 import to_values, to_obj_nodes
-from .helpers2 import add_contributes_to
-from .helpers import val_to_float
+# from ..utils.helpers import add_contributes_to # don't import this version
+from ..utils.helpers2 import to_values, to_obj_nodes
+from ..utils.helpers2 import add_contributes_to
+from ..utils.helpers import val_to_float
 import sty
 import re
-from .logger import *
+from ..utils.logger import *
 from itertools import chain, product
 from math import isinf, isnan
 import math

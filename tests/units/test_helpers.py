@@ -1,8 +1,8 @@
 import math
 import unittest
 
-from jsflow import helpers
-from jsflow.utilities import wildcard, undefined
+from jsflow.utils import helpers
+from jsflow.utils.utilities import wildcard, undefined
 
 
 class TestHelpers(unittest.TestCase):

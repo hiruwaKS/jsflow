@@ -2,18 +2,18 @@
 This module is used to model the built-in modules of Node.js.
 """
 
-from .graph import Graph
-from .utilities import NodeHandleResult, BranchTag, BranchTagContainer
-from .utilities import wildcard
-from .utilities import get_random_hex
-from . import opgen
-from .helpers import val_to_str
-from .helpers2 import to_obj_nodes, to_values
-from .helpers2 import add_contributes_to
+from ..core.graph import Graph
+from ..utils.utilities import NodeHandleResult, BranchTag, BranchTagContainer
+from ..utils.utilities import wildcard
+from ..utils.utilities import get_random_hex
+from ..core import opgen
+from ..utils.helpers import val_to_str
+from ..utils.helpers2 import to_obj_nodes, to_values
+from ..utils.helpers2 import add_contributes_to
 import sty
 import re
 import os
-from .logger import *
+from ..utils.logger import *
 from itertools import chain
 
 

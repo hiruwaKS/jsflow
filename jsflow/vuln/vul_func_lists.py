@@ -30,7 +30,7 @@ signature_lists = {
     ],
     "nosql": ["sink_hqbpillvul_nosql"],
     "sanitation": ["parseInt"],
-    "path_traversal": ["pipe", "sink_hqbpillvul_http_write"],
+    "path_traversal": ["pipe", "sink_hqbpillvul_http_write", "sink_hqbpillvul_fs_read"],
 }
 
 
