@@ -5,3 +5,4 @@ z3-solver~=4.8.8.0
 tqdm~=4.48.2
 setuptools
 pytest
+pytest-cov

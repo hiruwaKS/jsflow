@@ -29,7 +29,22 @@ signature_lists = {
         "res.write",
         "res.end",
     ],
-    "proto_pollution": ["merge", "extend", "clone", "parse"],
+    # Prototype pollution "goal" function names used by rough call graph pruning.
+    # This list is intentionally broad: real-world prototype pollution commonly
+    # flows through deep-merge / deep-set helpers rather than explicit writes
+    # to built-in prototypes.
+    "proto_pollution": [
+        "merge",
+        "extend",
+        "assign",
+        "defaultsDeep",
+        "defaultsdeep",
+        "set",
+        "setWith",
+        "setwith",
+        "clone",
+        "parse",
+    ],
     "code_exec": [
         "Function",
         "eval",

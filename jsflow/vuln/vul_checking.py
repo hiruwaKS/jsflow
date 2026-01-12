@@ -4,6 +4,8 @@ This module is used to check the vulnerabilities of the code.
 
 from ..core.trace_rule import TraceRule
 from .vul_func_lists import *
+from ..utils.helpers import get_func_name, is_wildcard_obj
+from ..utils.utilities import wildcard
 
 
 def get_path_text(G, path, caller):
@@ -414,76 +416,292 @@ def vul_checking(G, pathes, vul_type):
 
 
 def check_pp(G):
+    """
+    Detect prototype pollution patterns.
+
+    This checker is intentionally heuristic: prototype pollution often happens
+    through "deep set"/"deep merge" helpers instead of explicit writes to
+    `Object.prototype`.
+
+    We look for:
+    - Direct writes to dangerous keys (`__proto__`, `prototype`, `constructor`)
+      where key/value is influenced by user input.
+    - Writes to built-in prototypes (Object/String/Array/Function/...) with
+      user-controlled property names.
+    - Calls to merge/set-like helpers where attacker-controlled objects/paths
+      can introduce dangerous keys.
+    """
     print("Checking proto_pollution...")
 
-    def _get_children(
-        node_id, edge_type=None, child_type=None, child_label=None, edge_scope=None
-    ):
-        nonlocal G
+    DANGEROUS_KEYS = {"__proto__", "prototype", "constructor"}
+
+    # Common helper names that can lead to prototype pollution when fed an
+    # attacker-controlled object or property path.
+    #
+    # Note: We intentionally include both bare names and common qualified names
+    # (e.g. Object.assign, _.merge) because JSFlow often loses module/receiver
+    # identity in graphs.
+    MERGE_LIKE_FUNCS = {
+        "merge",
+        "extend",
+        "assign",
+        "defaultsdeep",
+        "defaultsDeep",
+        "Object.assign",
+        "object.assign",
+        "_.merge",
+        "lodash.merge",
+        "$.extend",
+        "jquery.extend",
+    }
+    SET_LIKE_FUNCS = {
+        "set",
+        "setwith",
+        "setWith",
+        "put",
+        "putil.set",
+        "dot-prop.set",
+        "dotprop.set",
+        "object-path.set",
+        "objectpath.set",
+        "lodash.set",
+        "_.set",
+    }
+
+    def _get_children(node_id, edge_type=None, child_type=None, child_label=None, edge_scope=None):
         children, scopes = [], []
         edges = G.get_out_edges(node_id, edge_type=edge_type)
         for edge in edges:
-            aim_node_attr = G.get_node_attr(edge[1])
+            aim = edge[1]
+            aim_node_attr = G.get_node_attr(aim)
             aim_edge_scope = edge[-1].get("scope")
             if child_type is not None and aim_node_attr.get("type") != child_type:
                 continue
-            if (
-                child_label is not None
-                and aim_node_attr.get("labels:label") != child_label
-            ):
+            if child_label is not None and aim_node_attr.get("labels:label") != child_label:
                 continue
             if edge_scope is not None and aim_edge_scope != edge_scope:
                 continue
-            children.append(edge[1])
+            children.append(aim)
             scopes.append(aim_edge_scope)
         return children, scopes
 
+    def _is_tainted_obj(obj_node) -> bool:
+        return bool(G.get_node_attr(obj_node).get("tainted"))
+
+    def _is_wildcard_or_tainted(obj_node) -> bool:
+        return _is_tainted_obj(obj_node) or is_wildcard_obj(G, obj_node)
+
+    def _obj_to_string(obj_node):
+        """
+        Best-effort extraction of a string value for an Object node.
+        """
+        attrs = G.get_node_attr(obj_node)
+        v = attrs.get("value")
+        if v is None:
+            v = attrs.get("code")
+        if v is None:
+            v = attrs.get("name")
+        if v is None:
+            return None
+        if v == wildcard:
+            return None
+        s = str(v).strip()
+        # strip quotes if present
+        if len(s) >= 2 and ((s[0] == s[-1] == "'") or (s[0] == s[-1] == '"')):
+            s = s[1:-1]
+        return s
+
+    def _expr_obj_nodes(expr_ast, scope):
+        obj_nodes, _ = _get_children(expr_ast, edge_type="REFERS_TO", child_label="Object", edge_scope=scope)
+        return obj_nodes
+
+    def _expr_is_tainted(expr_ast, scope) -> bool:
+        return any(_is_tainted_obj(o) for o in _expr_obj_nodes(expr_ast, scope))
+
+    def _expr_has_dangerous_literal(expr_ast, scope) -> bool:
+        """
+        Best-effort: if we can resolve a literal string value for the expression,
+        check whether it is a dangerous key.
+        """
+        for o in _expr_obj_nodes(expr_ast, scope):
+            s = _obj_to_string(o)
+            if s in DANGEROUS_KEYS:
+                return True
+        # Fallback to AST code if available (e.g. '"__proto__"')
+        code = G.get_node_attr(expr_ast).get("code")
+        if isinstance(code, str):
+            c = code.strip().strip("'\"")
+            if c in DANGEROUS_KEYS:
+                return True
+        return False
+
+    def _call_names(call_ast):
+        """
+        Return a small set of possible call names for matching:
+        - receiver.method
+        - method
+        - fallback name
+        """
+        node_attr = G.get_node_attr(call_ast)
+        names = []
+        if node_attr.get("type") == "AST_METHOD_CALL":
+            children = G.get_ordered_ast_child_nodes(call_ast)
+            if len(children) >= 2:
+                receiver = G.get_name_from_child(children[0], order=1)
+                method = G.get_name_from_child(children[1], order=1)
+                if receiver and method:
+                    names.append(f"{receiver}.{method}")
+                if method:
+                    names.append(method)
+        fallback = G.get_name_from_child(call_ast, order=1)
+        if fallback:
+            names.append(fallback)
+        # preserve order but remove duplicates
+        out = []
+        for n in names:
+            if n not in out:
+                out.append(n)
+        return out
+
+    def _receiver_looks_pollutable(prop_expr_ast, scope) -> bool:
+        """
+        Heuristic: identify writes that target built-in prototypes / their properties.
+        """
+        # Old approach: REFERS_TO Name nodes intersecting known pollutable names.
+        name_nodes, _ = _get_children(prop_expr_ast, edge_type="REFERS_TO", child_label="Name", edge_scope=scope)
+        if set(name_nodes) & set(getattr(G, "pollutable_name_nodes", set())):
+            return True
+        # Also consider receiver objects being known pollutable objects.
+        try:
+            receiver_ast = G.get_ordered_ast_child_nodes(prop_expr_ast)[0]
+        except Exception:
+            return False
+        recv_objs = _expr_obj_nodes(receiver_ast, scope)
+        if set(recv_objs) & set(getattr(G, "pollutable_objs", set())):
+            return True
+        return False
+
     results = set()
-    for node in G.get_all_nodes():
-        # check every assignment
-        if G.get_node_attr(node).get("type") != "AST_ASSIGN":
+
+    # 1) Direct assignment patterns: x[ key ] = value / x.key = value
+    for assign in G.get_node_by_attr("type", "AST_ASSIGN"):
+        children = G.get_ordered_ast_child_nodes(assign)
+        if len(children) < 2:
             continue
-        children = G.get_ordered_ast_child_nodes(node)
-        if len(children) != 2:
-            continue
-        left, right = children
-        # whose left side is prop expression
+        left, right = children[:2]
         if G.get_node_attr(left).get("type") not in ["AST_DIM", "AST_PROP"]:
             continue
-        # get all possible scopes
+
+        # Determine scopes in which the left side is resolved
         _, scopes = _get_children(left, edge_type="REFERS_TO", child_label="Name")
         for scope in set(scopes):
-            # the left side should have the name nodes of functions in built-in prototypes
-            name_nodes, _ = _get_children(
-                left, edge_type="REFERS_TO", child_label="Name", edge_scope=scope
-            )
-            if not (set(name_nodes) & set(G.pollutable_name_nodes)):
-                continue
-            # make sure the property names are tainted
             prop_children = G.get_ordered_ast_child_nodes(left)
-            if len(prop_children) != 2:
+            if len(prop_children) < 2:
                 continue
-            prop_name_ast_node = prop_children[1]
-            prop_name_obj_nodes, _ = _get_children(
-                prop_name_ast_node,
-                edge_type="REFERS_TO",
-                child_label="Object",
-                edge_scope=scope,
-            )
-            if not any(
-                map(
-                    lambda obj: G.get_node_attr(obj).get("tainted"), prop_name_obj_nodes
-                )
-            ):
+            prop_name_ast = prop_children[1]
+
+            key_tainted = _expr_is_tainted(prop_name_ast, scope)
+            key_dangerous_literal = _expr_has_dangerous_literal(prop_name_ast, scope)
+            value_tainted = _expr_is_tainted(right, scope)
+
+            receiver_pollutable = _receiver_looks_pollutable(left, scope)
+
+            # Production-oriented: require attacker influence AND a write pattern
+            # that can realistically hit prototype gadgets.
+            #
+            # - If the key is tainted, it may be "__proto__"/"constructor"/"prototype",
+            #   so writing to *any* object is potentially polluting (e.g. obj["__proto__"]).
+            # - If the key is an explicit dangerous literal, require tainted value
+            #   (to avoid flagging intentional hardcoded prototype plumbing).
+            # - If the receiver is a known built-in prototype, require tainted key/value.
+            if key_tainted:
+                pass  # allow: obj[taintedKey] = ...
+            elif key_dangerous_literal:
+                if not value_tainted:
+                    continue
+            elif receiver_pollutable:
+                if not (key_tainted or value_tainted):
+                    continue
+            else:
                 continue
-            # the right side should have tainted objects
-            obj_nodes, _ = _get_children(
-                right, edge_type="REFERS_TO", child_label="Object", edge_scope=scope
-            )
-            if not any(map(lambda obj: G.get_node_attr(obj).get("tainted"), obj_nodes)):
-                continue
-            # if found, add the AST node
-            results.add(node)
+
+            # Record finding with a small reason tag for debugging/reporting.
+            reason = []
+            if key_tainted:
+                reason.append("tainted_key")
+            if value_tainted:
+                reason.append("tainted_value")
+            if key_dangerous_literal:
+                reason.append("dangerous_key")
+            if receiver_pollutable:
+                reason.append("pollutable_receiver")
+            G.set_node_attr(assign, ("pp_reason", ",".join(reason)))
+            results.add(assign)
+
+    # 2) Call patterns: merge/set helpers with attacker-controlled input
+    call_nodes = G.get_node_by_attr("type", "AST_CALL") + G.get_node_by_attr("type", "AST_METHOD_CALL")
+    for call in call_nodes:
+        # Get ordered AST children and locate argument list node (best-effort)
+        children = G.get_ordered_ast_child_nodes(call)
+        if not children:
+            continue
+
+        # Determine likely call name(s)
+        names = _call_names(call)
+        # Also add helper get_func_name (often returns method only)
+        fn = get_func_name(G, call)
+        if fn and fn not in names:
+            names.append(fn)
+
+        lowered = {n.lower() for n in names if isinstance(n, str)}
+        is_merge_like = any(n in {m.lower() for m in MERGE_LIKE_FUNCS} for n in lowered)
+        is_set_like = any(n in {s.lower() for s in SET_LIKE_FUNCS} for n in lowered)
+        if not (is_merge_like or is_set_like):
+            continue
+
+        # Identify scopes for this call site (via any REFERS_TO edge)
+        _, scopes = _get_children(call, edge_type="REFERS_TO")
+        if not scopes:
+            scopes = [None]
+
+        for scope in set(scopes):
+            # Argument list is usually the last child for calls in this AST format.
+            arg_list_ast = children[-1] if children else None
+            arg_asts = G.get_ordered_ast_child_nodes(arg_list_ast) if arg_list_ast else []
+
+            # Determine whether any argument is wildcard/tainted object-ish.
+            arg_obj_nodes = []
+            for a in arg_asts:
+                arg_obj_nodes.extend(_expr_obj_nodes(a, scope))
+
+            any_tainted_arg_obj = any(_is_wildcard_or_tainted(o) for o in arg_obj_nodes)
+
+            # Additionally, check for dangerous literal keys in string/path arguments.
+            any_dangerous_key_arg = any(_expr_has_dangerous_literal(a, scope) for a in arg_asts)
+            any_tainted_key_arg = any(_expr_is_tainted(a, scope) for a in arg_asts)
+
+            # Merge-like: flag when attacker-controlled object is merged/extended/assigned.
+            if is_merge_like and any_tainted_arg_obj:
+                reason = ["merge_like", "tainted_arg"]
+                if any_dangerous_key_arg:
+                    reason.append("dangerous_key_arg")
+                if any_tainted_key_arg:
+                    reason.append("tainted_key_arg")
+                G.set_node_attr(call, ("pp_reason", ",".join(reason)))
+                results.add(call)
+
+            # Set-like: flag when key/path is attacker-controlled or explicitly dangerous.
+            if is_set_like and (any_tainted_key_arg or any_dangerous_key_arg):
+                reason = ["set_like"]
+                if any_tainted_key_arg:
+                    reason.append("tainted_key_arg")
+                if any_dangerous_key_arg:
+                    reason.append("dangerous_key_arg")
+                if any_tainted_arg_obj:
+                    reason.append("tainted_arg")
+                G.set_node_attr(call, ("pp_reason", ",".join(reason)))
+                results.add(call)
+
     if results:
         print("found:", results)
     else:

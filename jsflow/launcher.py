@@ -109,7 +109,17 @@ def unittest_main(
         G.auto_exploit = args.exploit
         G.coarse_only = args.coarse_only
     G.entry_file_path = original_path
-    result = analyze_files(G, file_path, check_signatures=check_signatures)
+    # Prototype pollution is most commonly a *module API* vulnerability:
+    # the vulnerable logic is inside exported functions, not top-level code.
+    #
+    # For production use, default to "module-style" execution for proto pollution
+    # even when the caller did not explicitly request module mode.
+    if G.check_proto_pollution and (args is None or not getattr(args, "module", False)):
+        G.run_all = True
+        script = f"var __jsflow_pp_entry=require('{file_path}');"
+        result = analyze_string(G, script, generate_graph=True)
+    else:
+        result = analyze_files(G, file_path, check_signatures=check_signatures)
     # output location of prototype pollution to a seperate file
     proto_pollution_logger = create_logger(
         "proto_pollution",
@@ -254,6 +264,12 @@ def main():
         args.vul_type = "proto_pollution"
     if args.vul_type == "ipt":
         args.vul_type = "int_prop_tampering"
+
+    # Production default: prototype pollution is usually inside exported APIs,
+    # so we treat the input as a module unless the user explicitly opts into
+    # script-mode analysis.
+    if args.vul_type == "proto_pollution" and not args.module and args.input_file and args.input_file != "-":
+        args.module = True
 
     # Set up log directory
     log_dir = setup_log_directory()

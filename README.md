@@ -1,6 +1,6 @@
 # jsflow
 
-**jsflow** is a static analysis tool for JavaScript that performs vulnerability detection through symbolic execution and object graph generation. The core analysis engine is implemented in the `jsflow` module.
+**jsflow** is a static analysis tool for JavaScript that performs vulnerability detection and exploit generation through object graph generation. The core analysis engine is implemented in the `jsflow` module.
 
 ## Overview
 
