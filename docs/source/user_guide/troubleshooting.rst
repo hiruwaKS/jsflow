@@ -118,14 +118,14 @@ Third-Party Libraries
 * **Dynamic Loading**: Libraries loaded dynamically may not be analyzed properly
 
 Runtime Dependencies
-~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~
 
 * **Configuration Files**: Analysis doesn't consider runtime configuration
 * **Environment Variables**: Environment-dependent code paths may not be explored
 * **Database State**: Database queries are analyzed without considering actual data
 
 Debugging Tips
--------------
+---------------
 
 Enable Verbose Logging
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -179,7 +179,7 @@ For large codebases, consider these optimization strategies:
 **Parallel Processing**: Analyze multiple files in parallel using separate processes.
 
 Getting Help
------------
+------------
 
 If you encounter issues not covered here:
 
@@ -189,7 +189,7 @@ If you encounter issues not covered here:
 4. **Check file formats**: Ensure JavaScript files are properly formatted and encoded
 
 Best Practices
--------------
+--------------
 
 To get the most reliable results from jsflow:
 
@@ -200,7 +200,7 @@ To get the most reliable results from jsflow:
 * **Test Regularly**: Incorporate jsflow into your CI/CD pipeline for continuous security monitoring
 
 Known Issues
------------
+------------
 
 * **Large Files**: Analysis of very large JavaScript files (>10MB) may cause memory issues
 * **Complex Regex**: Regular expressions with complex patterns may not be analyzed accurately

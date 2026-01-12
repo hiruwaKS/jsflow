@@ -318,7 +318,7 @@ The esprima interface has several limitations:
 * **Process Management**: Subprocess management adds overhead
 
 Future Enhancements
-------------------
+-------------------
 
 Planned improvements:
 

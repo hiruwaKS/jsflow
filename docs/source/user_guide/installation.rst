@@ -53,7 +53,7 @@ This script will automatically:
 - Install all Python dependencies
 
 Python Dependencies
-------------------
+-------------------
 
 * ``networkx`` (~=2.4): Graph data structure library
 * ``z3-solver`` (~=4.8.8.0): Constraint solving for path analysis

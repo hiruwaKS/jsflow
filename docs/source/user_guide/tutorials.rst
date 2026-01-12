@@ -179,7 +179,7 @@ Limit function call chain depth:
    python -m jsflow -c 2 -t nosql app.js
 
 Tutorial 5: Programmatic Usage
------------------------------
+------------------------------
 
 This tutorial shows how to use jsflow programmatically.
 

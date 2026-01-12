@@ -340,7 +340,7 @@ Trace rules have several limitations:
 * **False Positives**: May report false positives in complex codebases
 
 Future Enhancements
-------------------
+-------------------
 
 Planned improvements to trace rules:
 
