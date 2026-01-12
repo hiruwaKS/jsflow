@@ -2,6 +2,8 @@
 This module is used to check the vulnerabilities of the code.
 """
 
+import re
+
 from ..core.trace_rule import TraceRule
 from .vul_func_lists import *
 from ..utils.helpers import get_func_name, is_wildcard_obj
@@ -443,21 +445,40 @@ def check_pp(G):
     # identity in graphs.
     MERGE_LIKE_FUNCS = {
         "merge",
+        "mergewith",
+        "mergeWith",
+        "deepmerge",
+        "deepMerge",
         "extend",
+        "extendwith",
+        "extendWith",
         "assign",
+        "assignin",
+        "assignIn",
         "defaultsdeep",
         "defaultsDeep",
+        "defaults",
         "Object.assign",
         "object.assign",
         "_.merge",
+        "_.mergeWith",
+        "_.defaultsDeep",
+        "_.assign",
         "lodash.merge",
+        "lodash.mergeWith",
+        "lodash.defaultsDeep",
         "$.extend",
         "jquery.extend",
+        "jQuery.extend",
+        "jQuery.fn.extend",
     }
     SET_LIKE_FUNCS = {
         "set",
         "setwith",
         "setWith",
+        "merge.set",
+        "baseSet",
+        "baseset",
         "put",
         "putil.set",
         "dot-prop.set",
@@ -466,7 +487,14 @@ def check_pp(G):
         "objectpath.set",
         "lodash.set",
         "_.set",
+        # Common vulnerable helpers (e.g. arr-flatten-unflatten).
+        "unflatten",
+        "arr-unflatten",
+        "arr-flatten-unflatten",
     }
+
+    MERGE_LIKE_FUNCS_LOWER = {m.lower() for m in MERGE_LIKE_FUNCS}
+    SET_LIKE_FUNCS_LOWER = {s.lower() for s in SET_LIKE_FUNCS}
 
     def _get_children(node_id, edge_type=None, child_type=None, child_label=None, edge_scope=None):
         children, scopes = [], []
@@ -490,6 +518,19 @@ def check_pp(G):
 
     def _is_wildcard_or_tainted(obj_node) -> bool:
         return _is_tainted_obj(obj_node) or is_wildcard_obj(G, obj_node)
+
+    def _is_wildcard_or_tainted_string(obj_node) -> bool:
+        """
+        Property keys are usually strings; treat wildcard strings as attacker-controlled.
+        Avoid counting wildcard numbers (array indices) as controlled keys.
+        """
+        attrs = G.get_node_attr(obj_node)
+        if _is_tainted_obj(obj_node):
+            return True
+        if not is_wildcard_obj(G, obj_node):
+            return False
+        t = attrs.get("type")
+        return t == "string" or t == wildcard
 
     def _obj_to_string(obj_node):
         """
@@ -518,6 +559,31 @@ def check_pp(G):
     def _expr_is_tainted(expr_ast, scope) -> bool:
         return any(_is_tainted_obj(o) for o in _expr_obj_nodes(expr_ast, scope))
 
+    def _expr_is_tainted_or_wildcard_string(expr_ast, scope) -> bool:
+        return any(_is_wildcard_or_tainted_string(o) for o in _expr_obj_nodes(expr_ast, scope))
+
+    def _string_has_dangerous_key_segment(s: str) -> bool:
+        """
+        Detect dangerous keys not only as a full key, but inside dotted / bracketed paths.
+        Examples:
+          "__proto__"
+          "__proto__.polluted"
+          "constructor.prototype.polluted"
+          "a['__proto__'].b"
+        """
+        if not s:
+            return False
+        lower = s.lower()
+        if "__proto__" in lower:
+            return True
+        if "constructor" in lower and "prototype" in lower:
+            return True
+        # Tokenize on non-identifier chars to catch bracket/dot variants.
+        for tok in re.split(r"[^a-zA-Z0-9_$]+", lower):
+            if tok in DANGEROUS_KEYS:
+                return True
+        return False
+
     def _expr_has_dangerous_literal(expr_ast, scope) -> bool:
         """
         Best-effort: if we can resolve a literal string value for the expression,
@@ -525,13 +591,17 @@ def check_pp(G):
         """
         for o in _expr_obj_nodes(expr_ast, scope):
             s = _obj_to_string(o)
+            if s is None:
+                continue
             if s in DANGEROUS_KEYS:
+                return True
+            if _string_has_dangerous_key_segment(s):
                 return True
         # Fallback to AST code if available (e.g. '"__proto__"')
         code = G.get_node_attr(expr_ast).get("code")
         if isinstance(code, str):
             c = code.strip().strip("'\"")
-            if c in DANGEROUS_KEYS:
+            if c in DANGEROUS_KEYS or _string_has_dangerous_key_segment(c):
                 return True
         return False
 
@@ -562,6 +632,24 @@ def check_pp(G):
             if n not in out:
                 out.append(n)
         return out
+
+    def _name_looks_merge_like(name: str) -> bool:
+        n = name.lower()
+        if n in MERGE_LIKE_FUNCS_LOWER:
+            return True
+        # Heuristic fallbacks for library-internal helpers (e.g. lodash baseMerge).
+        return any(tok in n for tok in ("merge", "extend", "assign", "defaultsdeep"))
+
+    def _name_looks_set_like(name: str) -> bool:
+        n = name.lower()
+        if n in SET_LIKE_FUNCS_LOWER:
+            return True
+        # Avoid matching unrelated words like "asset" by requiring a boundary-ish context.
+        if "unflatten" in n:
+            return True
+        if n.endswith("set") or n.endswith(".set") or n.endswith("_set"):
+            return True
+        return any(tok in n for tok in ("object-path", "dot-prop", "putil", "setobject", "set-object"))
 
     def _receiver_looks_pollutable(prop_expr_ast, scope) -> bool:
         """
@@ -594,13 +682,17 @@ def check_pp(G):
 
         # Determine scopes in which the left side is resolved
         _, scopes = _get_children(left, edge_type="REFERS_TO", child_label="Name")
-        for scope in set(scopes):
+        # Some AST nodes don't carry REFERS_TO edges directly; in that case, fall back
+        # to a scope-agnostic check to avoid missing common patterns like `result[key]=...`.
+        for scope in (set(scopes) or {None}):
             prop_children = G.get_ordered_ast_child_nodes(left)
             if len(prop_children) < 2:
                 continue
             prop_name_ast = prop_children[1]
 
-            key_tainted = _expr_is_tainted(prop_name_ast, scope)
+            # In real-world PP, the dangerous key often comes from iterating attacker-controlled objects.
+            # JSFlow frequently models such keys as wildcard strings rather than explicitly tainted.
+            key_tainted = _expr_is_tainted_or_wildcard_string(prop_name_ast, scope)
             key_dangerous_literal = _expr_has_dangerous_literal(prop_name_ast, scope)
             value_tainted = _expr_is_tainted(right, scope)
 
@@ -654,8 +746,8 @@ def check_pp(G):
             names.append(fn)
 
         lowered = {n.lower() for n in names if isinstance(n, str)}
-        is_merge_like = any(n in {m.lower() for m in MERGE_LIKE_FUNCS} for n in lowered)
-        is_set_like = any(n in {s.lower() for s in SET_LIKE_FUNCS} for n in lowered)
+        is_merge_like = any(_name_looks_merge_like(n) for n in lowered)
+        is_set_like = any(_name_looks_set_like(n) for n in lowered)
         if not (is_merge_like or is_set_like):
             continue
 
@@ -678,7 +770,7 @@ def check_pp(G):
 
             # Additionally, check for dangerous literal keys in string/path arguments.
             any_dangerous_key_arg = any(_expr_has_dangerous_literal(a, scope) for a in arg_asts)
-            any_tainted_key_arg = any(_expr_is_tainted(a, scope) for a in arg_asts)
+            any_tainted_key_arg = any(_expr_is_tainted_or_wildcard_string(a, scope) for a in arg_asts)
 
             # Merge-like: flag when attacker-controlled object is merged/extended/assigned.
             if is_merge_like and any_tainted_arg_obj:
@@ -701,6 +793,72 @@ def check_pp(G):
                     reason.append("tainted_arg")
                 G.set_node_attr(call, ("pp_reason", ",".join(reason)))
                 results.add(call)
+
+    # 3) Structural patterns: for-in loops copying properties to objects
+    #
+    # Many real-world PP gadgets look like:
+    #   for (k in src) dst[k] = src[k]   (or recursive variants)
+    # even when JSFlow does not precisely taint `k`.
+    #
+    # We conservatively flag computed writes inside JS_FOR_IN loops, and
+    # specifically detect the common "copy by loop key" pattern.
+    def _ast_is_string_literal(ast_id) -> bool:
+        code = G.get_node_attr(ast_id).get("code")
+        if not isinstance(code, str):
+            return False
+        c = code.strip()
+        return len(c) >= 2 and ((c[0] == c[-1] == "'") or (c[0] == c[-1] == '"'))
+
+    for foreach in G.get_node_by_attr("type", "AST_FOREACH"):
+        if G.get_node_attr(foreach).get("flags:string[]") != "JS_FOR_IN":
+            continue
+        try:
+            src_obj_ast, _value_ast, key_ast, body_ast = G.get_ordered_ast_child_nodes(foreach)
+        except Exception:
+            continue
+
+        key_name = G.get_name_from_child(key_ast, order=1) or G.get_name_from_child(key_ast)
+        body_nodes = set([body_ast])
+        try:
+            body_nodes.update(G.get_all_child_nodes(body_ast))
+        except Exception:
+            pass
+
+        for assign in (n for n in body_nodes if G.get_node_attr(n).get("type") == "AST_ASSIGN"):
+            try:
+                left, right = G.get_ordered_ast_child_nodes(assign)[:2]
+            except Exception:
+                continue
+            if G.get_node_attr(left).get("type") != "AST_DIM":
+                continue
+            try:
+                dim_children = G.get_ordered_ast_child_nodes(left)
+                if len(dim_children) < 2:
+                    continue
+                prop_ast = dim_children[1]
+            except Exception:
+                continue
+
+            prop_code = G.get_node_attr(prop_ast).get("code")
+            prop_name = G.get_name_from_child(prop_ast, order=1) or G.get_name_from_child(prop_ast)
+
+            # Most common PP copy pattern: dst[key] = ...
+            if key_name and prop_name == key_name:
+                G.set_node_attr(assign, ("pp_reason", "for_in_copy_key"))
+                results.add(assign)
+                continue
+
+            # Also flag other computed writes inside for-in loops when the key isn't
+            # a simple string literal (e.g. curr[prop] where prop is derived from the loop key).
+            if not _ast_is_string_literal(prop_ast):
+                # If we can *also* see dangerous path segments in the RHS, bump confidence.
+                rhs_code = G.get_node_attr(right).get("code")
+                if isinstance(rhs_code, str) and _string_has_dangerous_key_segment(rhs_code):
+                    G.set_node_attr(assign, ("pp_reason", "for_in_computed_key_rhs_danger"))
+                    results.add(assign)
+                else:
+                    G.set_node_attr(assign, ("pp_reason", "for_in_computed_key"))
+                    results.add(assign)
 
     if results:
         print("found:", results)
