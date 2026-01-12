@@ -18,7 +18,17 @@ signature_lists = {
         "sink_hqbpillvul_execa_shell",
         "sink_hqbpillvul_shelljs_exec",
     ],
-    "xss": ["sink_hqbpillvul_http_write", "sink_hqbpillvul_http_setHeader"],
+    # XSS sinks (http response emission)
+    # - sink_hqbpillvul_* are modeled sinks used by builtin stubs
+    # - res.send/write/end are common Express/Node patterns that may appear
+    #   as dummy function names in graphs when the response object is a wildcard
+    "xss": [
+        "sink_hqbpillvul_http_write",
+        "sink_hqbpillvul_http_setHeader",
+        "res.send",
+        "res.write",
+        "res.end",
+    ],
     "proto_pollution": ["merge", "extend", "clone", "parse"],
     "code_exec": [
         "Function",
@@ -28,9 +38,18 @@ signature_lists = {
         # 'sink_hqbpillvul_execSync',
         "sink_hqbpillvul_eval",
     ],
-    "nosql": ["sink_hqbpillvul_nosql"],
+    # NoSQL sinks. In modeled MongoDB stubs we emit sink_hqbpillvul_nosql; in
+    # simple samples (e.g. tests) the query API can show up directly as `find`.
+    "nosql": ["sink_hqbpillvul_nosql", "find"],
     "sanitation": ["parseInt"],
-    "path_traversal": ["pipe", "sink_hqbpillvul_http_write", "sink_hqbpillvul_fs_read"],
+    # Path traversal sinks: either modeled sinks or direct fs read calls.
+    "path_traversal": [
+        "pipe",
+        "sink_hqbpillvul_http_write",
+        "sink_hqbpillvul_fs_read",
+        "fs.readFile",
+        "fs.readFileSync",
+    ],
 }
 
 

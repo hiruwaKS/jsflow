@@ -267,6 +267,17 @@ class TraceRuleOld(TraceRuleInterface):
         names = []
         node_attr = self.graph.get_node_attr(node)
         if node_attr.get("type") in call_types:
+            # Special-case method calls so we can match sinks like `res.send` or
+            # `fs.readFile` (common in regress tests and docs).
+            if node_attr.get("type") == "AST_METHOD_CALL":
+                children = self.graph.get_ordered_ast_child_nodes(node)
+                if len(children) >= 2:
+                    receiver = self.graph.get_name_from_child(children[0], order=1)
+                    method = self.graph.get_name_from_child(children[1], order=1)
+                    if receiver and method:
+                        names.append(f"{receiver}.{method}")
+                    if method:
+                        names.append(method)
             for child in self.graph.get_all_child_nodes(node):
                 name = self.graph.get_name_from_child(child)
                 if name:
@@ -275,6 +286,15 @@ class TraceRuleOld(TraceRuleInterface):
         for child in self.graph.get_all_child_nodes(node):
             child_attr = self.graph.get_node_attr(child)
             if child_attr.get("type") in call_types:
+                if child_attr.get("type") == "AST_METHOD_CALL":
+                    children = self.graph.get_ordered_ast_child_nodes(child)
+                    if len(children) >= 2:
+                        receiver = self.graph.get_name_from_child(children[0], order=1)
+                        method = self.graph.get_name_from_child(children[1], order=1)
+                        if receiver and method:
+                            names.append(f"{receiver}.{method}")
+                        if method:
+                            names.append(method)
                 name = self.graph.get_name_from_child(child)
                 if name:
                     names.append(name)
