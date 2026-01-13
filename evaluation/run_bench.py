@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Run jsflow on secbench dataset and evaluate results."""
+"""Run jsflow on a benchmark dataset and evaluate results.
+
+-j: number of jobs
+-d: dir of the dataset
+"""
 
 import json
 import os
@@ -21,14 +25,14 @@ CWE_TO_VULN_TYPE = {
     "CWE-471": "proto_pollution",
 }
 
-SECBENCH_DIR = Path("evaluation/explodejs-datasets/secbench-dataset")
+DEFAULT_DATASET_DIR = Path("evaluation/explodejs-datasets/secbench-dataset")
 
 
-def find_secbench_cases() -> List[Tuple[str, str]]:
-    """Find all secbench test cases."""
+def find_cases(dataset_dir: Path) -> List[Tuple[str, str]]:
+    """Find all test cases in a dataset."""
     cases = []
     for cwe_id in CWE_TO_VULN_TYPE:
-        cwe_dir = SECBENCH_DIR / cwe_id
+        cwe_dir = dataset_dir / cwe_id
         if cwe_dir.exists():
             cases.extend((cwe_id, name) for name in os.listdir(cwe_dir)
                         if (cwe_dir / name).is_dir())
@@ -148,10 +152,10 @@ def run_jsflow(file_path: str, vuln_type: str, timeout: int = DEFAULT_TIMEOUT) -
             _unregister_pgid(proc.pid)
 
 
-def process_case(cwe_id: str, case_name: str, timeout: int = DEFAULT_TIMEOUT) -> Dict:
+def process_case(cwe_id: str, case_name: str, dataset_dir: Path, timeout: int = DEFAULT_TIMEOUT) -> Dict:
     """Process a single test case."""
     vuln_type = CWE_TO_VULN_TYPE[cwe_id]
-    case_dir = SECBENCH_DIR / cwe_id / case_name
+    case_dir = dataset_dir / cwe_id / case_name
     src_file = case_dir / "src" / "index.js"
 
     if not src_file.exists():
@@ -191,9 +195,9 @@ def process_case(cwe_id: str, case_name: str, timeout: int = DEFAULT_TIMEOUT) ->
     }
 
 
-def evaluate_secbench(max_workers: int = None, timeout: int = DEFAULT_TIMEOUT):
-    """Run jsflow on secbench dataset and collect metrics."""
-    cases = find_secbench_cases()
+def evaluate_dataset(dataset_dir: Path = DEFAULT_DATASET_DIR, max_workers: int | None = None, timeout: int = DEFAULT_TIMEOUT):
+    """Run jsflow on a dataset and collect metrics."""
+    cases = find_cases(dataset_dir)
     results = {
         "total_cases": len(cases),
         "by_cwe": {cwe: {"total": 0, "detected": 0, "timeout": 0, "error": 0, "times": []}
@@ -205,7 +209,7 @@ def evaluate_secbench(max_workers: int = None, timeout: int = DEFAULT_TIMEOUT):
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
-            executor.submit(process_case, cwe_id, case_name, timeout): (cwe_id, case_name)
+            executor.submit(process_case, cwe_id, case_name, dataset_dir, timeout): (cwe_id, case_name)
             for cwe_id, case_name in cases
         }
 
@@ -263,7 +267,7 @@ def evaluate_secbench(max_workers: int = None, timeout: int = DEFAULT_TIMEOUT):
 def print_metrics(results: Dict):
     """Print evaluation metrics."""
     print("\n" + "=" * 60)
-    print("JSFLOW SECBENCH EVALUATION RESULTS")
+    print("JSFLOW BENCHMARK EVALUATION RESULTS")
     print("=" * 60)
 
     s = results["detection_summary"]
@@ -297,7 +301,7 @@ def print_metrics(results: Dict):
         print(f"\nMissed ({len(missed)}): {', '.join(missed)}")
 
 
-def save_results(results: Dict, output_file: str = "secbench_results.json"):
+def save_results(results: Dict, output_file: str = "bench_results.json"):
     """Save evaluation results to a JSON file."""
     with open(output_file, "w") as f:
         json.dump(results, f, indent=2)
@@ -307,8 +311,10 @@ def save_results(results: Dict, output_file: str = "secbench_results.json"):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Run jsflow on secbench dataset")
-    parser.add_argument("-j", "--jobs", type=int, default=None,
+    parser = argparse.ArgumentParser(description="Run jsflow on benchmark dataset")
+    parser.add_argument("-d", "--dataset-dir", type=Path, default=DEFAULT_DATASET_DIR,
+                        help=f"Dataset directory (default: {DEFAULT_DATASET_DIR})")
+    parser.add_argument("-j", "--jobs", type=int, default=os.cpu_count(),
                         help="Number of parallel jobs (default: CPU count)")
     parser.add_argument("-t", "--timeout", type=int, default=DEFAULT_TIMEOUT,
                         help=f"Timeout per case in seconds (default: {DEFAULT_TIMEOUT})")
@@ -316,7 +322,7 @@ if __name__ == "__main__":
 
     os.chdir(Path(__file__).parent.parent)
     try:
-        results = evaluate_secbench(max_workers=args.jobs, timeout=args.timeout)
+        results = evaluate_dataset(dataset_dir=args.dataset_dir, max_workers=args.jobs, timeout=args.timeout)
         print_metrics(results)
         save_results(results)
     except KeyboardInterrupt:
