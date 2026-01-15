@@ -1,8 +1,8 @@
 # jsflow Taint Analysis Benchmark Suite
 
-**World-Class Comprehensive Micro-Benchmarks for Evaluating JavaScript Taint Bug Detection Precision and Recall**
+**Micro-Benchmarks for Evaluating JavaScript Taint Bug Detection Precision and Recall**
 
-This benchmark suite provides a comprehensive set of test cases for evaluating static analysis tools' ability to detect JavaScript taint-related vulnerabilities. It covers 8 major CWE categories with over 500 individual test functions, designed to push the boundaries of modern static analysis.
+This benchmark suite provides test cases for evaluating static analysis tools' ability to detect JavaScript taint-related vulnerabilities supported by jsflow.
 
 ## Overview
 
@@ -18,55 +18,56 @@ This benchmark suite is designed to:
 
 ```
 tests/regress/
-├── BENCHMARK_METADATA_V2.json       # Metadata and test categorization
+├── BENCHMARK_METADATA_V3.json          # Metadata and test categorization
 ├── evaluate_benchmark.js              # Evaluation framework
-├── sql_injection.js                  # Original SQL injection tests
-├── sql_injection_comprehensive.js      # Comprehensive SQL injection (CWE-89)
-├── xss_vulnerable.js                 # Original XSS vulnerable tests
-├── xss_safe.js                      # Original XSS safe tests
-├── xss_comprehensive.js              # Comprehensive XSS (CWE-79)
-├── os_command_injection.js            # Original OS command injection
-├── os_command_injection_comprehensive.js # Comprehensive OS command injection (CWE-78)
-├── code_execution.js                  # Original code execution
-├── code_execution_comprehensive.js      # Comprehensive code execution (CWE-94)
-├── path_traversal.js                  # Original path traversal
-├── path_traversal_safe.js             # Original path traversal safe
-├── path_traversal_comprehensive.js     # Comprehensive path traversal (CWE-22)
-├── nosql_injection.js                # NoSQL injection (CWE-943)
-├── ssrf.js                          # SSRF (CWE-918)
-├── ssrf_comprehensive.js             # Comprehensive SSRF (CWE-918)
-├── prototype_pollution.js             # Prototype pollution (CWE-1321)
-├── precision_context.js               # Context-sensitivity tests
-├── precision_flow.js                 # Flow-sensitivity tests
-├── precision_field.js                # Field-sensitivity tests
-├── precision_path.js                 # Path-sensitivity tests
-├── precision_traps.js                # Trap/edge case tests
-├── recall_crypto.js                 # Crypto operations recall
-├── recall_data_structures.js          # Data structures recall
-├── recall_fs_process.js             # File system/process recall
-├── recall_http_misc.js              # HTTP/misc recall
-├── recall_network.js                # Network operations recall
-├── recall_vm_timers.js              # VM and timers recall
-├── recall_worker_cluster.js          # Worker/cluster recall
-├── complex_flows.js                # Complex data flow scenarios
-├── async_bench.js                   # Async flow benchmarks
-└── sanitization.js                 # Sanitization pattern tests
+├── README_BENCHMARK.md                # Documentation
+├── vulnerability_detection/           # Main vulnerability test files
+│   ├── xss_vulnerable.js              # XSS vulnerable tests
+│   ├── xss_comprehensive.js           # Comprehensive XSS (CWE-79)
+│   ├── os_command_injection.js        # OS command injection
+│   ├── os_command_injection_comprehensive.js # Comprehensive OS command injection (CWE-78)
+│   ├── code_execution.js              # Code execution
+│   ├── code_execution_comprehensive.js # Comprehensive code execution (CWE-94)
+│   ├── path_traversal.js              # Path traversal
+│   ├── path_traversal_comprehensive.js # Comprehensive path traversal (CWE-22)
+│   ├── nosql_injection.js             # NoSQL injection (CWE-943)
+│   └── prototype_pollution.js         # Prototype pollution (CWE-1321)
+├── precision/                         # Precision-only tests (safe patterns)
+│   ├── precision_context.js
+│   ├── precision_flow.js
+│   ├── precision_field.js
+│   ├── precision_path.js
+│   ├── precision_traps.js
+│   ├── xss_safe.js
+│   ├── path_traversal_safe.js
+│   ├── os_command_safe.js
+│   └── sanitization.js
+├── recall/                            # Recall-focused tests
+│   ├── recall_crypto.js
+│   ├── recall_data_structures.js
+│   ├── recall_fs_process.js
+│   ├── recall_http_misc.js
+│   ├── recall_network.js
+│   ├── recall_vm_timers.js
+│   └── recall_worker_cluster.js
+└── flows/                             # Complex / async flow tests
+    ├── complex_flows.js
+    ├── async_bench.js
+    └── motivating_v3.js
 ```
 
 ## CWE Coverage
 
 | CWE ID | Vulnerability Type | Test Files | Function Count |
 |---------|-------------------|-------------|----------------|
-| CWE-89 | SQL Injection | sql_injection.js, sql_injection_comprehensive.js | ~50 |
-| CWE-78 | OS Command Injection | os_command_injection.js, os_command_injection_comprehensive.js | ~50 |
-| CWE-79 | Cross-Site Scripting (XSS) | xss_vulnerable.js, xss_safe.js, xss_comprehensive.js | ~100 |
-| CWE-94 | Code Execution | code_execution.js, code_execution_comprehensive.js | ~20 |
-| CWE-22 | Path Traversal | path_traversal.js, path_traversal_safe.js, path_traversal_comprehensive.js | ~30 |
-| CWE-943 | NoSQL Injection | nosql_injection.js | ~15 |
-| CWE-918 | Server-Side Request Forgery (SSRF) | ssrf.js, ssrf_comprehensive.js | ~25 |
-| CWE-1321 | Prototype Pollution | prototype_pollution.js | ~15 |
+| CWE-78 | OS Command Injection | os_command_injection.js, os_command_injection_comprehensive.js | ~70 |
+| CWE-79 | Cross-Site Scripting (XSS) | xss_vulnerable.js, precision/xss_safe.js, xss_comprehensive.js | ~130 |
+| CWE-94 | Code Execution | code_execution.js, code_execution_comprehensive.js | ~40 |
+| CWE-22 | Path Traversal | path_traversal.js, precision/path_traversal_safe.js, path_traversal_comprehensive.js | ~50 |
+| CWE-943 | NoSQL Injection | nosql_injection.js | ~25 |
+| CWE-1321 | Prototype Pollution | prototype_pollution.js | ~20 |
 
-**Total**: ~500 test functions across 8 CWE categories
+**Total**: ~335 test functions across 6 CWE categories supported by jsflow
 
 ## Test Categories
 
@@ -74,21 +75,7 @@ tests/regress/
 
 Tests marked with `// VULNERABLE` contain actual security vulnerabilities that should be detected by static analysis tools.
 
-#### 1.1 SQL Injection (CWE-89)
-
-- **Database Libraries**: PostgreSQL (pg), MySQL, SQLite3, MongoDB
-- **Injection Patterns**:
-  - Direct concatenation (string +, template literals)
-  - Complex queries (subqueries, JOINs, ORDER BY, GROUP BY)
-  - All SQL statement types (SELECT, INSERT, UPDATE, DELETE)
-  - Union-based, time-based blind, error-based
-- **Real-World Patterns**:
-  - CVE-2021-21300 (type confusion)
-  - ORM misuse patterns
-  - Authentication bypass
-  - Search functionality
-
-#### 1.2 OS Command Injection (CWE-78)
+#### 1.1 OS Command Injection (CWE-78)
 
 - **All child_process functions**: exec, execSync, execFile, execFileSync, spawn, spawnSync, fork
 - **Command Separators**: ;, &&, ||, |, &, \n
@@ -101,7 +88,7 @@ Tests marked with `// VULNERABLE` contain actual security vulnerabilities that s
   - Backup and cron operations
 - **Advanced Attacks**: Blind injection, OOB exfiltration, reverse shells, base64/hex encoding
 
-#### 1.3 Cross-Site Scripting (XSS) (CWE-79)
+#### 1.2 Cross-Site Scripting (XSS) (CWE-79)
 
 - **XSS Types**:
   - Reflected XSS
@@ -125,7 +112,7 @@ Tests marked with `// VULNERABLE` contain actual security vulnerabilities that s
   - Clickjacking
   - SVG, data URIs
 
-#### 1.4 Code Execution (CWE-94)
+#### 1.3 Code Execution (CWE-94)
 
 - **Execution Methods**:
   - eval() with user input
@@ -136,7 +123,7 @@ Tests marked with `// VULNERABLE` contain actual security vulnerabilities that s
   - Dynamic require()
   - Global object pollution
 
-#### 1.5 Path Traversal (CWE-22)
+#### 1.4 Path Traversal (CWE-22)
 
 - **Traversal Patterns**: ../, URL encoding, double encoding, UTF-8 encoding
 - **Path Manipulation**: Null byte injection, absolute paths, long paths
@@ -146,7 +133,7 @@ Tests marked with `// VULNERABLE` contain actual security vulnerabilities that s
   - Backup restoration
   - Configuration file access
 
-#### 1.6 NoSQL Injection (CWE-943)
+#### 1.5 NoSQL Injection (CWE-943)
 
 - **MongoDB Patterns**:
   - Direct object injection
@@ -154,19 +141,7 @@ Tests marked with `// VULNERABLE` contain actual security vulnerabilities that s
   - Regex-based injection
 - **Mongoose Patterns**: Query building, field manipulation
 
-#### 1.7 Server-Side Request Forgery (SSRF) (CWE-918)
-
-- **Internal Network Access**: localhost, private IPs, AWS metadata
-- **URL Parsing Bypasses**: Fragments, @ sign, protocol-relative URLs
-- **Protocol Bypasses**: file://, custom protocols
-- **Real-World Patterns**:
-  - Webhooks
-  - PDF generation services
-  - Image proxies
-  - XML external entities (XXE)
-  - DNS rebinding attacks
-
-#### 1.8 Prototype Pollution (CWE-1321)
+#### 1.6 Prototype Pollution (CWE-1321)
 
 - **Vulnerable Patterns**:
   - Recursive merge functions
@@ -192,11 +167,9 @@ Tests marked with `// SAFE` contain no actual vulnerabilities. Analysis tools sh
 
 #### 2.2 Safe Patterns
 
-- **SQL**: Parameterized queries, explicit type casting, whitelisting
 - **XSS**: textContent, HTML entity encoding, template engine auto-escaping
 - **Command Injection**: Array form of spawn/execFile, argument validation, shell escaping
 - **Path Traversal**: Path normalization, whitelisting, absolute path validation
-- **SSRF**: Host whitelisting, URL validation, protocol restrictions
 
 ### 3. Complex Flow Tests
 
@@ -253,7 +226,7 @@ The evaluation framework calculates:
 
 ## Metadata System
 
-`BENCHMARK_METADATA_V2.json` provides:
+`BENCHMARK_METADATA_V3.json` provides:
 
 - **CWE Mapping**: Test files organized by CWE
 - **Function Metadata**: Expected behavior for each test function
@@ -296,7 +269,7 @@ function safeFunction(req) {
    };
    ```
 
-3. **Update Metadata**: Add to `BENCHMARK_METADATA_V2.json`:
+3. **Update Metadata**: Add to `BENCHMARK_METADATA_V3.json`:
    ```json
    {
      "test_file_details": {

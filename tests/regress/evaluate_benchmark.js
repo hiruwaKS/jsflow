@@ -33,8 +33,10 @@ class BenchmarkEvaluator {
     }
 
     loadMetadata(benchmarkDir) {
-        const metadataPath = path.join(benchmarkDir, 'BENCHMARK_METADATA_V2.json');
-        if (fs.existsSync(metadataPath)) {
+        const metadataV3 = path.join(benchmarkDir, 'BENCHMARK_METADATA_V3.json');
+        const metadataV2 = path.join(benchmarkDir, 'BENCHMARK_METADATA_V2.json');
+        const metadataPath = fs.existsSync(metadataV3) ? metadataV3 : metadataV2;
+        if (metadataPath && fs.existsSync(metadataPath)) {
             const content = fs.readFileSync(metadataPath, 'utf8');
             return JSON.parse(content);
         }
@@ -44,15 +46,36 @@ class BenchmarkEvaluator {
     }
 
     listTestFiles(benchmarkDir) {
-        const files = fs.readdirSync(benchmarkDir);
-        return files.filter(file => file.endsWith('.js') && file !== 'BENCHMARK_METADATA_V2.json');
+        const files = [];
+        const skipDirs = new Set(['recall', 'flows']);
+
+        const walk = (dir, relativeBase = '') => {
+            const entries = fs.readdirSync(dir, { withFileTypes: true });
+            for (const entry of entries) {
+                if (entry.isDirectory()) {
+                    if (skipDirs.has(entry.name)) continue;
+                    const nextRelative = relativeBase
+                        ? path.join(relativeBase, entry.name)
+                        : entry.name;
+                    walk(path.join(dir, entry.name), nextRelative);
+                    continue;
+                }
+
+                if (!entry.isFile() || !entry.name.endsWith('.js')) continue;
+                if (entry.name === 'evaluate_benchmark.js') continue;
+                files.push(relativeBase ? path.join(relativeBase, entry.name) : entry.name);
+            }
+        };
+
+        walk(benchmarkDir);
+        return files;
     }
 
     async evaluateTestFile(benchmarkDir, testFile, toolOutput, metadata) {
         const filePath = path.join(benchmarkDir, testFile);
         const content = fs.readFileSync(filePath, 'utf8');
 
-        const fileMetadata = metadata.test_file_details[testFile] || {};
+        const fileMetadata = metadata.test_file_details[path.basename(testFile)] || {};
         const expectedCWE = fileMetadata.cwe;
         const expectedType = fileMetadata.type;
 

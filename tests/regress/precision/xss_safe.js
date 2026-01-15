@@ -1,3 +1,4 @@
+
 // Escapes user input before sending to response (should stay clean).
 function escapeHtml(str) {
   return String(str)

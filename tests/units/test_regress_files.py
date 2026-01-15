@@ -68,7 +68,7 @@ class TestRegressFiles(unittest.TestCase):
 
     def test_path_traversal_safe(self):
         """Test that path_traversal_safe.js does not detect path traversal."""
-        self._run_test("path_traversal_safe.js", "path_traversal", should_detect=False)
+        self._run_test("precision/path_traversal_safe.js", "path_traversal", should_detect=False)
 
     def test_os_command_injection_detection(self):
         """Test OS command injection detection on os_command_injection.js."""
@@ -76,7 +76,7 @@ class TestRegressFiles(unittest.TestCase):
 
     def test_os_command_safe(self):
         """Test that os_command_safe.js does not detect OS command injection."""
-        self._run_test("os_command_safe.js", "os_command", should_detect=False)
+        self._run_test("precision/os_command_safe.js", "os_command", should_detect=False)
 
     def test_xss_vulnerable_detection(self):
         """Test XSS detection on xss_vulnerable.js."""
@@ -84,7 +84,7 @@ class TestRegressFiles(unittest.TestCase):
 
     def test_xss_safe(self):
         """Test that xss_safe.js does not detect XSS."""
-        self._run_test("xss_safe.js", "xss", should_detect=False)
+        self._run_test("precision/xss_safe.js", "xss", should_detect=False)
 
     def test_code_execution_detection(self):
         """Test code execution detection on code_execution.js."""
@@ -100,7 +100,7 @@ class TestRegressFiles(unittest.TestCase):
 
     def test_motivating_v3_detection(self):
         """Test OS command injection detection on motivating_v3.js."""
-        self._run_test("motivating_v3.js", "os_command", should_detect=True)
+        self._run_test("flows/motivating_v3.js", "os_command", should_detect=True)
 
 
 if __name__ == "__main__":

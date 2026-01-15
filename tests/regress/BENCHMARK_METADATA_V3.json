@@ -2,249 +2,120 @@
   "benchmark_suite": "jsflow_taint_analysis_benchmark",
   "version": "3.0",
   "created": "2025-01-14",
-  "description": "World's Best Comprehensive Micro-Benchmarks for Evaluating JavaScript Taint Bug Detection Precision and Recall - 18 CWEs, ~950+ test functions, 8,500+ lines of code",
+  "description": "Comprehensive Micro-Benchmarks for Evaluating JavaScript Taint Bug Detection Precision and Recall - optimized for jsflow supported vulnerabilities",
 
   "statistics": {
-    "total_test_files": 44,
-    "total_test_functions": 950,
-    "vulnerable_tests": 600,
-    "safe_tests": 350,
-    "cwe_coverage": 18
+    "total_test_files": 20,
+    "total_test_functions": 335,
+    "vulnerable_tests": 210,
+    "safe_tests": 125,
+    "cwe_coverage": 7
   },
 
   "cwe_mapping": {
-    "CWE-89": {
-      "name": "SQL Injection",
-      "test_files": [
-        "sql_injection.js",
-        "sql_injection_comprehensive.js"
-      ],
-      "total_functions": 70
-    },
     "CWE-78": {
       "name": "OS Command Injection",
       "test_files": [
-        "os_command_injection.js",
-        "os_command_injection_comprehensive.js"
+        "vulnerability_detection/os_command_injection.js",
+        "vulnerability_detection/os_command_injection_comprehensive.js"
       ],
       "total_functions": 70
     },
     "CWE-79": {
       "name": "Cross-Site Scripting (XSS)",
       "test_files": [
-        "xss_vulnerable.js",
-        "xss_safe.js",
-        "xss_comprehensive.js"
+        "vulnerability_detection/xss_vulnerable.js",
+        "precision/xss_safe.js",
+        "vulnerability_detection/xss_comprehensive.js"
       ],
       "total_functions": 130
     },
     "CWE-94": {
       "name": "Code Execution",
       "test_files": [
-        "code_execution.js",
-        "code_execution_comprehensive.js"
+        "vulnerability_detection/code_execution.js",
+        "vulnerability_detection/code_execution_comprehensive.js"
       ],
       "total_functions": 40
     },
     "CWE-22": {
       "name": "Path Traversal",
       "test_files": [
-        "path_traversal.js",
-        "path_traversal_safe.js",
-        "path_traversal_comprehensive.js"
+        "vulnerability_detection/path_traversal.js",
+        "precision/path_traversal_safe.js",
+        "vulnerability_detection/path_traversal_comprehensive.js"
       ],
       "total_functions": 50
     },
     "CWE-943": {
       "name": "NoSQL Injection",
       "test_files": [
-        "nosql_injection.js"
+        "vulnerability_detection/nosql_injection.js"
       ],
       "total_functions": 25
-    },
-    "CWE-918": {
-      "name": "Server-Side Request Forgery (SSRF)",
-      "test_files": [
-        "ssrf.js",
-        "ssrf_comprehensive.js"
-      ],
-      "total_functions": 45
     },
     "CWE-1321": {
       "name": "Prototype Pollution",
       "test_files": [
-        "prototype_pollution.js"
+        "vulnerability_detection/prototype_pollution.js"
       ],
       "total_functions": 20
-    },
-    "CWE-502": {
-      "name": "Deserialization",
-      "test_files": [
-        "deserialization_comprehensive.js"
-      ],
-      "total_functions": 45,
-      "total_functions": 10,
-      "total_functions": 5,
-      "total_functions": 15,
-      "total_functions": 10,
-      "total_functions": 5
-    },
-    "CWE-200": {
-      "name": "Information Exposure",
-      "test_files": [
-        "information_exposure_comprehensive.js"
-      ],
-      "total_functions": 60,
-      "total_functions": 15,
-      "total_functions": 15,
-      "total_functions": 10,
-      "total_functions": 10,
-      "total_functions": 10,
-      "total_functions": 10,
-      "total_functions": 5,
-      "total_functions": 5
-    },
-    "CWE-352": {
-      "name": "Cross-Site Request Forgery (CSRF)",
-      "test_files": [
-        "csrf_comprehensive.js"
-      ],
-      "total_functions": 65
-    },
-    "CWE-611": {
-      "name": "XXE (XML External Entity)",
-      "test_files": [],
-      "total_functions": 0
-    },
-    "CWE-90": {
-      "name": "LDAP Injection",
-      "test_files": [],
-      "total_functions": 0
-    },
-    "CWE-1336": {
-      "name": "SSTI (Server-Side Template Injection)",
-      "test_files": [
-        "ssti_comprehensive.js"
-      ],
-      "total_functions": 40,
-      "total_functions": 10,
-      "total_functions": 10,
-      "total_functions": 5,
-      "total_functions": 10,
-      "total_functions": 5
-    },
-    "CWE-943": {
-      "name": "GraphQL Injection",
-      "test_files": [
-        "graphql_injection_comprehensive.js"
-      ],
-      "total_functions": 60
-    },
-    "CWE-565": {
-      "name": "JWT Manipulation",
-      "test_files": [
-        "jwt_manipulation_comprehensive.js"
-      ],
-      "total_functions": 65
-    },
-    "CWE-942": {
-      "name": "ReDoS (Regular Expression DoS)",
-      "test_files": [],
-      "total_functions": 0
-    },
-    "CWE-843": {
-      "name": "Type Confusion",
-      "test_files": [],
-      "total_functions": 0
-    },
-    "CWE-362": {
-      "name": "Race Conditions",
-      "test_files": [],
-      "total_functions": 0
-    },
-    "CWE-798": {
-      "name": "Hardcoded Credentials",
-      "test_files": [],
-      "total_functions": 0
-    },
-    "CWE-400": {
-      "name": "Resource Exhaustion",
-      "test_files": [],
-      "total_functions": 0
-    },
-    "CWE-770": {
-      "name": "Allocation of Resources Without Limits",
-      "test_files": [],
-      "total_functions": 0
     }
   },
 
   "test_categories": {
     "vulnerability_detection": {
       "description": "Tests for detecting actual vulnerabilities (recall)",
-      "cwe_count": 18,
+      "cwe_count": 7,
       "test_files": [
-        "sql_injection.js", "sql_injection_comprehensive.js",
-        "os_command_injection.js", "os_command_injection_comprehensive.js",
-        "xss_vulnerable.js", "xss_safe.js", "xss_comprehensive.js",
-        "code_execution.js", "code_execution_comprehensive.js",
-        "path_traversal.js", "path_traversal_safe.js", "path_traversal_comprehensive.js",
-        "nosql_injection.js",
-        "ssrf.js", "ssrf_comprehensive.js",
-        "prototype_pollution.js",
-        "deserialization_comprehensive.js",
-        "information_exposure_comprehensive.js",
-        "csrf_comprehensive.js",
-        "ssti_comprehensive.js",
-        "graphql_injection_comprehensive.js",
-        "jwt_manipulation_comprehensive.js"
+        "vulnerability_detection/os_command_injection.js",
+        "vulnerability_detection/os_command_injection_comprehensive.js",
+        "vulnerability_detection/xss_vulnerable.js",
+        "vulnerability_detection/xss_comprehensive.js",
+        "vulnerability_detection/code_execution.js",
+        "vulnerability_detection/code_execution_comprehensive.js",
+        "vulnerability_detection/path_traversal.js",
+        "vulnerability_detection/path_traversal_comprehensive.js",
+        "vulnerability_detection/nosql_injection.js",
+        "vulnerability_detection/prototype_pollution.js"
       ],
-      "total_functions": 600
+      "total_functions": 210
     },
     "precision": {
       "description": "Tests for avoiding false positives (precision)",
       "cwe_count": 0,
       "test_files": [
-        "precision_context.js",
-        "precision_flow.js",
-        "precision_field.js",
-        "precision_path.js",
-        "precision_traps.js",
-        "xss_safe.js",
-        "path_traversal_safe.js",
-        "os_command_safe.js",
-        "sql_injection_comprehensive.js",
-        "xss_comprehensive.js",
-        "os_command_injection_comprehensive.js",
-        "code_execution_comprehensive.js",
-        "path_traversal_comprehensive.js",
-        "ssrf_comprehensive.js",
-        "deserialization_comprehensive.js",
-        "information_exposure_comprehensive.js",
-        "csrf_comprehensive.js",
-        "ssti_comprehensive.js",
-        "graphql_injection_comprehensive.js",
-        "jwt_manipulation_comprehensive.js"
+        "precision/precision_context.js",
+        "precision/precision_flow.js",
+        "precision/precision_field.js",
+        "precision/precision_path.js",
+        "precision/precision_traps.js",
+        "precision/xss_safe.js",
+        "precision/path_traversal_safe.js",
+        "precision/os_command_safe.js",
+        "vulnerability_detection/xss_comprehensive.js",
+        "vulnerability_detection/os_command_injection_comprehensive.js",
+        "vulnerability_detection/code_execution_comprehensive.js",
+        "vulnerability_detection/path_traversal_comprehensive.js"
       ],
-      "total_functions": 350
+      "total_functions": 125
     },
     "recall": {
       "description": "Tests for detecting vulnerabilities through complex patterns",
       "cwe_count": 0,
       "test_files": [
-        "recall_crypto.js",
-        "recall_data_structures.js",
-        "recall_fs_process.js",
-        "recall_http_misc.js",
-        "recall_network.js",
-        "recall_vm_timers.js",
-        "recall_worker_cluster.js",
-        "async_bench.js",
-        "complex_flows.js",
-        "os_command_injection_comprehensive.js",
-        "code_execution_comprehensive.js",
-        "path_traversal_comprehensive.js",
-        "ssrf_comprehensive.js"
+        "recall/recall_crypto.js",
+        "recall/recall_data_structures.js",
+        "recall/recall_fs_process.js",
+        "recall/recall_http_misc.js",
+        "recall/recall_network.js",
+        "recall/recall_vm_timers.js",
+        "recall/recall_worker_cluster.js",
+        "flows/async_bench.js",
+        "flows/complex_flows.js",
+        "vulnerability_detection/os_command_injection_comprehensive.js",
+        "vulnerability_detection/code_execution_comprehensive.js",
+        "vulnerability_detection/path_traversal_comprehensive.js"
       ],
       "total_functions": 100
     },
@@ -252,8 +123,8 @@
       "description": "Complex data flow scenarios",
       "cwe_count": 0,
       "test_files": [
-        "complex_flows.js",
-        "async_bench.js"
+        "flows/complex_flows.js",
+        "flows/async_bench.js"
       ],
       "total_functions": 50
     },
@@ -261,7 +132,7 @@
       "description": "Tests for proper sanitization patterns",
       "cwe_count": 0,
       "test_files": [
-        "sanitization.js"
+        "precision/sanitization.js"
       ],
       "total_functions": 25
     },
@@ -269,140 +140,76 @@
       "description": "Motivating examples",
       "cwe_count": 0,
       "test_files": [
-        "motivating_v3.js"
+        "flows/motivating_v3.js"
       ],
       "total_functions": 10
     }
   },
 
   "test_file_details": {
-    "sql_injection.js": {
-      "type": "vulnerability_detection",
-      "cwe": "CWE-89",
-      "functions": {}
-    },
-    "sql_injection_comprehensive.js": {
-      "type": "vulnerability_detection",
-      "cwe": "CWE-89",
-      "functions": {},
-      "description": "Comprehensive SQL injection with multiple DB libraries, all injection types, complex flows, real-world CVEs"
-    },
-    "xss_vulnerable.js": {
+    "vulnerability_detection/xss_vulnerable.js": {
       "type": "vulnerability_detection",
       "cwe": "CWE-79",
       "functions": {}
     },
-    "xss_safe.js": {
+    "precision/xss_safe.js": {
       "type": "precision",
       "cwe": "CWE-79",
       "functions": {}
     },
-    "xss_comprehensive.js": {
+    "vulnerability_detection/xss_comprehensive.js": {
       "type": "vulnerability_detection",
       "cwe": "CWE-79",
       "functions": {},
       "description": "Comprehensive XSS with reflected, stored, DOM-based, filter evasion, frameworks, advanced techniques"
     },
-    "os_command_injection.js": {
+    "vulnerability_detection/os_command_injection.js": {
       "type": "vulnerability_detection",
       "cwe": "CWE-78",
       "functions": {}
     },
-    "os_command_injection_comprehensive.js": {
+    "vulnerability_detection/os_command_injection_comprehensive.js": {
       "type": "vulnerability_detection",
       "cwe": "CWE-78",
       "functions": {},
       "description": "Comprehensive OS command injection with all child_process functions, separators, encoding, real-world patterns, advanced attacks"
     },
-    "code_execution.js": {
+    "vulnerability_detection/code_execution.js": {
       "type": "vulnerability_detection",
       "cwe": "CWE-94",
       "functions": {}
     },
-    "code_execution_comprehensive.js": {
+    "vulnerability_detection/code_execution_comprehensive.js": {
       "type": "vulnerability_detection",
       "cwe": "CWE-94",
       "functions": {},
       "description": "Comprehensive code execution with eval, Function constructor, VM, dynamic require, global pollution"
     },
-    "path_traversal.js": {
+    "vulnerability_detection/path_traversal.js": {
       "type": "vulnerability_detection",
       "cwe": "CWE-22",
       "functions": {}
     },
-    "path_traversal_safe.js": {
+    "precision/path_traversal_safe.js": {
       "type": "precision",
       "cwe": "CWE-22",
       "functions": {}
     },
-    "path_traversal_comprehensive.js": {
+    "vulnerability_detection/path_traversal_comprehensive.js": {
       "type": "vulnerability_detection",
       "cwe": "CWE-22",
       "functions": {},
       "description": "Comprehensive path traversal with ../ patterns, encoding bypasses, normalization issues, real-world scenarios"
     },
-    "nosql_injection.js": {
+    "vulnerability_detection/nosql_injection.js": {
       "type": "vulnerability_detection",
       "cwe": "CWE-943",
       "functions": {}
     },
-    "ssrf.js": {
-      "type": "vulnerability_detection",
-      "cwe": "CWE-918",
-      "functions": {}
-    },
-    "ssrf_comprehensive.js": {
-      "type": "vulnerability_detection",
-      "cwe": "CWE-918",
-      "functions": {},
-      "description": "Comprehensive SSRF with internal networks, URL parsing bypasses, protocol bypasses, DNS rebinding, real-world patterns"
-    },
-    "prototype_pollution.js": {
+    "vulnerability_detection/prototype_pollution.js": {
       "type": "vulnerability_detection",
       "cwe": "CWE-1321",
       "functions": {}
-    },
-    "deserialization_comprehensive.js": {
-      "type": "vulnerability_detection",
-      "cwe": "CWE-502",
-      "functions": {},
-      "description": "Comprehensive deserialization with JSON, YAML, XML, binary formats, object injection, CVE reproductions"
-    },
-    "information_exposure_comprehensive.js": {
-      "type": "vulnerability_detection",
-      "cwe": "CWE-200",
-      "functions": {},
-      "description": "Comprehensive information exposure with sensitive data, stack traces, source code, headers, comments, logs"
-    },
-    "csrf_comprehensive.js": {
-      "type": "vulnerability_detection",
-      "cwe": "CWE-352",
-      "functions": {},
-      "description": "Comprehensive CSRF with no protection, token bypasses, SameSite issues, origin/referer, JSONP, GET CSRF, advanced vectors"
-    },
-    "ssti_comprehensive.js": {
-      "type": "vulnerability_detection",
-      "cwe": "CWE-1336",
-      "functions": {},
-      "description": "Comprehensive SSTI with Handlebars, EJS, Pug, Mustache, Nunjucks, advanced vectors, real-world patterns"
-    },
-    "graphql_injection_comprehensive.js": {
-      "type": "vulnerability_detection",
-      "cwe": "CWE-943",
-      "functions": {},
-      "description": "Comprehensive GraphQL injection with NoSQL, introspection, auth bypass, DoS, IDOR, CSRF"
-    },
-    "jwt_manipulation_comprehensive.js": {
-      "type": "vulnerability_detection",
-      "cwe": "CWE-565",
-      "functions": {},
-      "description": "Comprehensive JWT with none algorithm, weak secrets, token issues, payload manipulation, signature forgery"
-    },
-    "BENCHMARK_METADATA_V2.json": {
-      "type": "metadata",
-      "cwe": null,
-      "functions": {},
-      "description": "Metadata and test categorization"
     },
     "evaluate_benchmark.js": {
       "type": "evaluation",
@@ -451,18 +258,18 @@
       "description": "Comprehensive CWE coverage with standardized format"
     },
     "jsflow_Benchmark_v3.0": {
-      "test_count": 950,
-      "cwe_count": 18,
+      "test_count": 335,
+      "cwe_count": 7,
       "language": "JavaScript",
-      "description": "CWE-based micro-benchmarks with modern web patterns, frameworks, real-world CVEs"
+      "description": "CWE-based micro-benchmarks for jsflow supported vulnerabilities"
     }
   },
 
   "quality_metrics": {
-    "coverage_score": "A- (18 CWE categories, covering all critical web vulnerabilities)",
-    "breadth_score": "A+ (950+ test functions across diverse attack vectors)",
+    "coverage_score": "B (7 CWE categories supported by jsflow)",
+    "breadth_score": "A (335+ test functions across supported attack vectors)",
     "depth_score": "A+ (Real-world CVE reproductions, advanced bypass techniques)",
-    "innovation_score": "S+ (First to combine 18 CWEs for JavaScript taint, modern frameworks, JWT, GraphQL, SSTI)",
+    "innovation_score": "A (JavaScript taint analysis with modern patterns)",
     "usability_score": "A+ (Automated evaluation, clear documentation, extensible architecture)"
   }
 }
