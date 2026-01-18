@@ -6,10 +6,17 @@ const path = require('path');
 const builtInModules = require('module').builtinModules;
 const ansicolor = require('ansicolor').nice;
 
-function searchModule(moduleName, requiredBy) {
+const args = process.argv.slice(2);
+const noBuiltinPackages = args.includes('--no-builtin-packages');
+const filteredArgs = args.filter((arg) => arg !== '--no-builtin-packages');
+
+function searchModule(moduleName, requiredBy, disableBuiltinPackages = false) {
     var selfBuiltPackages = ['yargs', 'execa', 'express', 'send', 'async', 'mz/child_process', 'denodeify','commander', 'platform-command', 'grunt', 'pm', 'boom', 'async'];
     selfBuiltPackages = selfBuiltPackages.concat(['mongodb', 'monk']);
     if (builtInModules.includes(moduleName) || selfBuiltPackages.indexOf(moduleName) >= 0) {
+        if (disableBuiltinPackages) {
+            return ['built-in', 'built-in'];
+        }
         // console.error(`${moduleName.blue.bright} is a built-in module.`);
         let searchPaths = new Set();
         let currentSearchPath = __dirname;
@@ -117,11 +124,11 @@ module.exports.searchModule = searchModule;
 module.exports.searchMain = searchMain;
 
 if (require.main === module) {
-    if (process.argv.length != 4) {
-        console.error('Wrong arguments, usage: search.js <module name> <search path>');
+    if (filteredArgs.length != 2) {
+        console.error('Wrong arguments, usage: search.js [--no-builtin-packages] <module name> <search path>');
     } else {
         var mainPath, modulePath;
-        [mainPath, modulePath] = searchModule(process.argv[2], process.argv[3]);
+        [mainPath, modulePath] = searchModule(filteredArgs[0], filteredArgs[1], noBuiltinPackages);
         if (mainPath && modulePath){
             console.log(mainPath);
             console.log(modulePath);

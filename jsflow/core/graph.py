@@ -114,6 +114,7 @@ class Graph:
 
         # Python-modeled built-in modules
         self.builtin_modules = {}
+        self.disable_builtin_packages = False
 
         # prototype pollution
         self.check_proto_pollution = False

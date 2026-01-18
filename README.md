@@ -97,6 +97,9 @@ python -m jsflow -t os_command input.js
 
 # Check for prototype pollution
 python -m jsflow -P input.js
+
+# Disable JS-modeled stubs in builtin_packages/
+python -m jsflow --no-builtin-packages input.js
 ```
 
 See [docs/USAGE.md](docs/USAGE.md) for detailed usage instructions, examples, and advanced configuration.
@@ -107,4 +110,3 @@ See [docs/USAGE.md](docs/USAGE.md) for detailed usage instructions, examples, an
 - **[Usage Guide](docs/USAGE.md)**: Command-line options, programmatic usage, examples, and advanced configuration
 - **[Vulnerability Types](docs/VULNERABILITIES.md)**: Detailed information about each vulnerability type with examples
 - **[Troubleshooting](docs/TROUBLESHOOTING.md)**: Limitations, common issues, debugging tips, and references
-

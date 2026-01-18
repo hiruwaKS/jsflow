@@ -231,6 +231,11 @@ def main():
         "By default, only main functions will be run.",
     )
     parser.add_argument(
+        "--no-builtin-packages",
+        action="store_true",
+        help="Disable JS-modeled stubs in builtin_packages/ (treat as unmodeled).",
+    )
+    parser.add_argument(
         "-f",
         "--function-timeout",
         type=float,
@@ -306,6 +311,7 @@ def main():
     G.single_branch = args.single_branch
     G.vul_type = args.vul_type
     G.func_entry_point = args.entry_func
+    G.disable_builtin_packages = args.no_builtin_packages
     G.check_proto_pollution = (
         args.prototype_pollution or args.vul_type == "proto_pollution"
     )

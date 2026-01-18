@@ -107,9 +107,16 @@ def kill_all_running_subprocesses(*, grace_seconds: float = 1.0) -> None:
         _kill_pgid(pgid, signal.SIGKILL)
 
 
-def run_jsflow(file_path: str, vuln_type: str, timeout: int = DEFAULT_TIMEOUT) -> Tuple[bool, float, str]:
+def run_jsflow(
+    file_path: str,
+    vuln_type: str,
+    timeout: int = DEFAULT_TIMEOUT,
+    disable_builtin_packages: bool = False,
+) -> Tuple[bool, float, str]:
     """Run jsflow on a file."""
     cmd = ["python3", "-m", "jsflow", "-t", vuln_type, "-q", file_path]
+    if disable_builtin_packages:
+        cmd.insert(3, "--no-builtin-packages")
     start_time = time.time()
     proc: subprocess.Popen | None = None
     try:
@@ -152,7 +159,13 @@ def run_jsflow(file_path: str, vuln_type: str, timeout: int = DEFAULT_TIMEOUT) -
             _unregister_pgid(proc.pid)
 
 
-def process_case(cwe_id: str, case_name: str, dataset_dir: Path, timeout: int = DEFAULT_TIMEOUT) -> Dict:
+def process_case(
+    cwe_id: str,
+    case_name: str,
+    dataset_dir: Path,
+    timeout: int = DEFAULT_TIMEOUT,
+    disable_builtin_packages: bool = False,
+) -> Dict:
     """Process a single test case."""
     vuln_type = CWE_TO_VULN_TYPE[cwe_id]
     case_dir = dataset_dir / cwe_id / case_name
@@ -174,7 +187,12 @@ def process_case(cwe_id: str, case_name: str, dataset_dir: Path, timeout: int = 
             }
 
     print(f"Analyzing: {cwe_id}/{case_name} ({vuln_type})")
-    detected, elapsed_time, output = run_jsflow(str(src_file), vuln_type, timeout)
+    detected, elapsed_time, output = run_jsflow(
+        str(src_file),
+        vuln_type,
+        timeout,
+        disable_builtin_packages=disable_builtin_packages,
+    )
 
     status = "success"
     if elapsed_time >= timeout or (isinstance(output, str) and "Timeout" in output):
@@ -195,7 +213,12 @@ def process_case(cwe_id: str, case_name: str, dataset_dir: Path, timeout: int = 
     }
 
 
-def evaluate_dataset(dataset_dir: Path = DEFAULT_DATASET_DIR, max_workers: int | None = None, timeout: int = DEFAULT_TIMEOUT):
+def evaluate_dataset(
+    dataset_dir: Path = DEFAULT_DATASET_DIR,
+    max_workers: int | None = None,
+    timeout: int = DEFAULT_TIMEOUT,
+    disable_builtin_packages: bool = False,
+):
     """Run jsflow on a dataset and collect metrics."""
     cases = find_cases(dataset_dir)
     results = {
@@ -209,7 +232,14 @@ def evaluate_dataset(dataset_dir: Path = DEFAULT_DATASET_DIR, max_workers: int |
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
-            executor.submit(process_case, cwe_id, case_name, dataset_dir, timeout): (cwe_id, case_name)
+            executor.submit(
+                process_case,
+                cwe_id,
+                case_name,
+                dataset_dir,
+                timeout,
+                disable_builtin_packages,
+            ): (cwe_id, case_name)
             for cwe_id, case_name in cases
         }
 
@@ -318,11 +348,21 @@ if __name__ == "__main__":
                         help="Number of parallel jobs (default: CPU count)")
     parser.add_argument("-t", "--timeout", type=int, default=DEFAULT_TIMEOUT,
                         help=f"Timeout per case in seconds (default: {DEFAULT_TIMEOUT})")
+    parser.add_argument(
+        "--no-builtin-packages",
+        action="store_true",
+        help="Disable JS-modeled stubs in builtin_packages/ during evaluation.",
+    )
     args = parser.parse_args()
 
     os.chdir(Path(__file__).parent.parent)
     try:
-        results = evaluate_dataset(dataset_dir=args.dataset_dir, max_workers=args.jobs, timeout=args.timeout)
+        results = evaluate_dataset(
+            dataset_dir=args.dataset_dir,
+            max_workers=args.jobs,
+            timeout=args.timeout,
+            disable_builtin_packages=args.no_builtin_packages,
+        )
         print_metrics(results)
         save_results(results)
     except KeyboardInterrupt:

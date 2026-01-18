@@ -4642,7 +4642,10 @@ def handle_require_legacy(G, node_id, extra=None):
             if not module_exports_objs:
                 # check if the file's AST is in the graph
                 file_path, _ = esprima_search(
-                    module_name, G.get_cur_file_path(), print_func=logger.info
+                    module_name,
+                    G.get_cur_file_path(),
+                    print_func=logger.info,
+                    disable_builtin_packages=G.disable_builtin_packages,
                 )
                 if not file_path:  # module not found
                     continue
@@ -4720,7 +4723,10 @@ def handle_require(G: Graph, caller_ast, extra, _, module_names):
                 ):
                     require_from = G.file_stack[-2]
                 file_path, _ = esprima_search(
-                    module_name, require_from, print_func=logger.info
+                    module_name,
+                    require_from,
+                    print_func=logger.info,
+                    disable_builtin_packages=G.disable_builtin_packages,
                 )
                 if not file_path:  # module not found
                     continue

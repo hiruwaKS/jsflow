@@ -30,9 +30,13 @@ def esprima_parse(path="-", args=[], input=None, print_func=print):
     return stdout
 
 
-def esprima_search(module_name, search_path, print_func=print):
+def esprima_search(module_name, search_path, print_func=print, disable_builtin_packages=False):
+    cmd = ["node", search_js_path]
+    if disable_builtin_packages:
+        cmd.append("--no-builtin-packages")
+    cmd.extend([module_name, search_path])
     proc = subprocess.Popen(
-        ["node", search_js_path, module_name, search_path],
+        cmd,
         text=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
