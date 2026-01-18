@@ -585,7 +585,16 @@ class Graph:
 
     def export_to_CSV(self, nodes_file_name, rels_file_name, light=False):
         """
-        export to CSV to import to neo4j
+        Export the graph to CSV files compatible with Neo4j import.
+
+        This method exports nodes and edges to separate CSV files. The CSV dialect
+        uses tab separation (tsv) as defined in `joern_dialect`.
+
+        Args:
+            nodes_file_name (str): Path to write the nodes CSV.
+            rels_file_name (str): Path to write the relationships (edges) CSV.
+            light (bool, optional): If True, only exports essential edge types
+                (FLOWS_TO, REACHES, OBJ_REACHES, ENTRY, EXIT). Defaults to False.
         """
         with open(nodes_file_name, "w") as fp:
             headers = [
@@ -1200,8 +1209,26 @@ class Graph:
         combined=True,
     ):
         """
-        add a obj to a scope, if scope is None, add to current scope
-        return the added node id
+        Add an object to a scope (variable declaration + initialization).
+
+        This is a high-level helper that:
+        1. Creates a name node in the scope (if it doesn't exist)
+        2. Creates a new object node (or uses an existing one)
+        3. Links the name node to the object node
+
+        Args:
+            name (str): Variable name.
+            ast_node (str, optional): AST node ID associated with the object.
+            js_type (str, optional): JavaScript type of the object. Defaults to "object".
+            value (str, optional): Literal value (if applicable).
+            scope (str, optional): Scope to add to. Defaults to current scope.
+            tobe_added_obj (str, optional): Existing object node to bind to the name.
+                If None, a new object is created.
+            combined (bool, optional): If True and adding to BASE_SCOPE, also
+                adds as a property to the global object (BASE_OBJ). Defaults to True.
+
+        Returns:
+            str: The node ID of the object (newly created or passed in).
         """
         if scope == None:
             scope = self.cur_scope
@@ -2365,6 +2392,27 @@ class Graph:
         return self.file_contents[file_name]
 
     def get_node_file_content_highlighted(self, node_id):
+        """
+        Get file content with tainted values highlighted.
+
+        This function performs a backward traversal from the given node to identify
+        tainted values (sources) and highlights them in the source code.
+
+        It works by:
+        1. Identifying all tainted objects contributing to the current node
+           (via CONTRIBUTES_TO edges).
+        2. Mapping these objects back to their AST nodes.
+        3. Using location information (namespace) from AST nodes to find the
+           corresponding source code range.
+        4. Applying ANSI color codes (red) to the tainted source code regions.
+
+        Args:
+            node_id: The AST node ID to retrieve content for.
+
+        Returns:
+            list: List of strings, where each string is a line of code with
+                  tainted parts highlighted in red.
+        """
         highlighted_obj_nodes = set()
 
         def dfs(now):

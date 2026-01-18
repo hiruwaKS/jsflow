@@ -35,6 +35,13 @@ def get_module(G, name):
 
 
 def setup_fs(G: Graph):
+    """
+    Model the Node.js 'fs' (file system) module.
+
+    Registers methods like:
+    - readFile
+    - readFileSync
+    """
     module_exports = G.add_obj_node()
     G.add_blank_func_as_prop("readFile", module_exports, read_file)
     G.add_blank_func_as_prop("readFileSync", module_exports, read_file_sync)
@@ -50,6 +57,12 @@ def read_file(
     options=None,
     callback=NodeHandleResult(),
 ):
+    """
+    Model fs.readFile.
+
+    Simulates reading a file. It calls the synchronous read_file_sync internally
+    and then invokes the callback with the result.
+    """
     if options is None:
         options = NodeHandleResult()
     data = read_file_sync(G, caller_ast, extra, None, path, options)
@@ -100,6 +113,13 @@ def read_file_sync(
 
 
 def setup_util(G: Graph):
+    """
+    Model the Node.js 'util' module.
+    
+    Registers methods like:
+    - format
+    - promisify (commented out in code)
+    """
     module_exports = G.add_obj_node()
     # G.add_blank_func_as_prop('promisify', module_exports, util_promisify)
     G.add_blank_func_as_prop("format", module_exports, util_format)
@@ -254,6 +274,14 @@ def setup_path(G: Graph):
 
 
 def path_join(G: Graph, caller_ast, extra, _, *paths):
+    """
+    Model path.join.
+
+    Simulates joining path segments. It:
+    - Concatenates known string values
+    - Handles wildcard values (propagating taint)
+    - Returns a new string object representing the joined path
+    """
     returned_objects = []
 
     def dfs(i=0, buffer="", src=[]):

@@ -80,12 +80,20 @@ def get_argnames_from_funcaller(G, node_id):
 
 def add_edges_between_funcs(G):
     """
-    Deprecated
+    [Deprecated] Add Control Flow and Data Flow edges between functions.
 
-    we need to add CFG and DF edges between funcs
-    find callers, if no flow to this node, go upper to find
-    a flow to. add CFG edges to callee CFG_ENTRY an DF edges
-    to PARAS
+    This function iterates through all CALLS edges in the graph and attempts
+    to link callers to callees by:
+    1. Finding the nearest CPG node for the caller.
+    2. Adding a FLOWS_TO edge from the caller to the callee's ENTRY node (Control Flow).
+    3. Adding INTER_FUNC_REACHES edges from caller arguments to callee parameters (Data Flow).
+    4. Adding FLOWS_TO edges from callee return statements back to the caller (Return Flow).
+
+    This logic is now largely handled dynamically during `handle_call` or similar
+    processes, but this function remains for post-processing or specific use cases.
+
+    Args:
+        G (Graph): The graph object.
     """
     call_edges = G.get_edges_by_type("CALLS")
     added_edge_list = []
@@ -179,14 +187,16 @@ def add_edges_between_funcs(G):
 
 def register_func(G, node_id):
     """
-    deprecated
+    [Deprecated] Register a function declaration to its parent function scope.
 
-    register the function to the nearest parent function like node
-    we assume the 1-level parent node is the stmt of parent function
+    This function attempts to link a function declaration to the function that
+    contains it (its parent scope). It updates the `HAVE_FUNC` attribute on
+    the parent function node and adds the child function ID to the global
+    `registered_func` dictionary.
 
     Args:
-        G: the graph object
-        node_id: the node that needed to be registered
+        G (Graph): The graph object.
+        node_id (str): The AST node ID of the function declaration to register.
     """
     # we assume this node only have one parent node
     # sometimes this could be the root node and do not have any parent nodes
@@ -730,15 +740,30 @@ def handle_prop(
     G, ast_node, side=None, extra=ExtraInfo()
 ) -> Tuple[NodeHandleResult, NodeHandleResult]:
     """
-    Handle property.
+    Handle a property access (MemberExpression) AST node.
+
+    This function processes member expressions like `obj.prop` or `obj['prop']`.
+    It recursively handles both the parent object (receiver) and the property name/key.
+    It then resolves the property lookup against the graph's object model, taking
+    into account prototype chains and possible wildcard matches.
+
+    Key responsibilities:
+    1. Evaluate the parent object expression.
+    2. Evaluate the property name expression.
+    3. Detect potential prototype pollution or internal property tampering.
+    4. Create new objects/properties if they don't exist (and are implied).
+    5. Return the resolved object nodes and name nodes.
 
     Args:
-        G (Graph): graph.
-        ast_node ([type]): the MemberExpression (AST_PROP) AST node.
-        extra (ExtraInfo, optional): Extra information. Defaults to {}.
+        G (Graph): The analysis graph.
+        ast_node (str): The AST node ID for the property access (AST_PROP).
+        side (str, optional): Context of the property access ('left' for assignment
+            target, 'right' for read access). Defaults to None.
+        extra (ExtraInfo, optional): Execution context (branches, etc.).
 
     Returns:
-        handled property, handled parent
+        tuple: A pair of (handled_property, handled_parent), where each is a
+            NodeHandleResult containing the resolved object nodes and name nodes.
     """
     # recursively handle both parts
     parent, prop = G.get_ordered_ast_child_nodes(ast_node)[:2]
@@ -2654,9 +2679,29 @@ def jsflow_block(
     G, ast_node, parent_scope=None, branches=None, block_scope=True, decl_var=False
 ):
     """
-    Analyze a block by running its statements one by one.
-    A block is a BlockStatement in JavaScript,
-    or an AST_STMT_LIST in PHP.
+    Execute a block of statements (BlockStatement or AST_STMT_LIST).
+
+    This function simulates the sequential execution of statements within a block.
+    It handles:
+    1. Scope creation (if block_scope is True).
+    2. Variable and function declarations (hoisting).
+    3. Sequential execution of statements.
+    4. Control flow linking between statements (FLOWS_TO edges).
+    5. Early termination checks (time limit, infinite loop detection).
+
+    Args:
+        G (Graph): The graph object.
+        ast_node (str): The AST node ID of the block.
+        parent_scope (str, optional): The parent scope. Defaults to current scope.
+        branches (BranchTagContainer, optional): Current branch context.
+        block_scope (bool, optional): Whether to create a new scope for this block.
+            Defaults to True.
+        decl_var (bool, optional): Whether to handle variable declarations.
+            Defaults to False.
+
+    Returns:
+        tuple: (returned_objs, used_objs) - Lists of objects returned or used
+               in the block.
     """
     if branches is None or G.single_branch:
         branches = BranchTagContainer()

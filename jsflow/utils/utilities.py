@@ -355,6 +355,28 @@ class BranchTagContainer(list):
 
 
 class ExtraInfo:
+    """
+    Carries additional context information during AST handling and graph construction.
+
+    This class passes around contextual state that isn't captured by the graph
+    structure itself, such as:
+    - Current execution branch/path constraints (branches)
+    - Which "side" of an assignment we are on (left/right)
+    - Parent object context for property access
+    - Caller AST node information
+    - Switch statement context variables
+    - Class definition context
+
+    Args:
+        original (ExtraInfo, optional): An existing ExtraInfo object to copy from.
+        **kwargs: Individual fields to override or set.
+            - branches (BranchTagContainer): Path constraints.
+            - side (str): 'left' or 'right'.
+            - parent_obj (str): ID of parent object node.
+            - caller_ast (str): ID of function caller AST node.
+            - switch_var (NodeHandleResult): Variable being switched on.
+            - class_obj (str): ID of class object node being defined.
+    """
     def __init__(self, original=None, **kwargs):
         self.branches = BranchTagContainer()
         self.side = None
@@ -401,6 +423,19 @@ class ExtraInfo:
 
 
 class ValueRange:
+    """
+    Represents a numeric range for abstract interpretation of values.
+
+    Used to track possible ranges of numeric variables to detect potential
+    overflows or out-of-bounds access, though currently basic.
+
+    Args:
+        original (ValueRange, optional): Existing range to copy.
+        **kwargs:
+            - min (float): Minimum value. Defaults to -inf.
+            - max (float): Maximum value. Defaults to +inf.
+            - type (str): 'float' or 'int'. Defaults to 'float'.
+    """
     def __init__(self, original=None, **kwargs):
         self.min = kwargs.get("min", -math.inf)
         self.max = kwargs.get("max", math.inf)
@@ -408,10 +443,15 @@ class ValueRange:
 
 
 class DictCounter(defaultdict):
+    """
+    A dictionary subclass that defaults to 0 and formats output for logging.
+    Useful for counting events or object occurrences.
+    """
     def __init__(self):
         super().__init__(lambda: 0)
 
     def gets(self, key, val=0):
+        """Get value formatted as 'key:value'."""
         value = super().get(key, val)
         return f"{key}:{value}"
 
@@ -420,10 +460,15 @@ class DictCounter(defaultdict):
 
 
 def get_random_hex(length=6):
+    """Generate a random hex string of given length."""
     return secrets.token_hex(length // 2)
 
 
 class _SpecialValue(object):
+    """
+    Internal wrapper for special symbolic values (e.g., wildcard, undefined).
+    Ensures these values have unique identity and string representation.
+    """
     def __init__(self, alt):
         self.alt = alt
         self._hash = get_random_hex()
@@ -450,6 +495,10 @@ undefined = _SpecialValue("undefined")
 
 
 class JSSpecialValue(Enum):
+    """
+    Enum representing JavaScript special types and values.
+    Used for type tagging and checking.
+    """
     # deprecated
     UNDEFINED = 0
     NULL = 1
@@ -463,6 +512,13 @@ class JSSpecialValue(Enum):
 
 
 class ConditionTag:
+    """
+    Tags a condition result with the operation type and operands involved.
+
+    Used in path-sensitive analysis to record *why* a branch was taken or
+    what condition needs to be satisfied for a path. It stores the logical
+    operation (OR, AND, NOT, comparison) and the values involved.
+    """
     logical_or = binary_bool_or = "LogicalOr"
     logical_and = binary_bool_and = "LogicalAnd"
     logical_not = unary_bool_or = "LogicalNot"

@@ -66,6 +66,16 @@ def eval_value(G: Graph, s: str, return_obj_node=False, ast_node=None):
 
 
 def val_to_str(value, default=wildcard):
+    """
+    Convert a value to its string representation for analysis.
+    
+    Args:
+        value: The value to convert.
+        default: Value to return if input is None or wildcard.
+        
+    Returns:
+        str: String representation, or default value.
+    """
     if type(value) in [float, int]:
         return "%g" % value
     if value is None or value == wildcard:
@@ -74,6 +84,16 @@ def val_to_str(value, default=wildcard):
 
 
 def val_to_float(value, default=wildcard):
+    """
+    Convert a value to a float.
+    
+    Args:
+        value: The value to convert.
+        default: Value to return if input is invalid or wildcard.
+        
+    Returns:
+        float: Converted float or default. Returns nan for conversion errors.
+    """
     if value is None or value == wildcard or value == undefined:
         return default
     try:
@@ -83,10 +103,20 @@ def val_to_float(value, default=wildcard):
 
 
 def cmp(a, b):
+    """Compare two values, returning 1, 0, or -1."""
     return (a > b) - (a < b)
 
 
 def js_cmp(v1, v2):
+    """
+    Compare two values using JavaScript loose comparison semantics.
+    
+    Args:
+        v1, v2: Values to compare.
+        
+    Returns:
+        int: 1 if v1 > v2, -1 if v1 < v2, 0 if equal.
+    """
     if type(v1) == type(v2):
         if v1 == undefined and v2 == undefined:
             return 0
@@ -253,6 +283,21 @@ def to_python_array(G: Graph, array_obj, value=False):
 
 
 def to_og_array(G: Graph, elements, edge_data, ast_node=None):
+    """
+    Create a Graph array object from a Python list of elements.
+    
+    Inverse of to_python_array. Constructs a new array object in the graph
+    populated with the provided elements.
+    
+    Args:
+        G (Graph): The graph.
+        elements (list): List of lists of object nodes (elements[i] = [obj1, obj2...]).
+        edge_data (list): List of lists of edge attributes.
+        ast_node (str, optional): AST node ID associated with creation.
+        
+    Returns:
+        str: The ID of the newly created array object node.
+    """
     added_array = G.add_obj_node(ast_node=ast_node, js_type="array")
     for i, elem in enumerate(elements):
         name_node = G.add_prop_name_node(name=str(i), parent_obj=added_array)
@@ -287,6 +332,7 @@ def to_og_array(G: Graph, elements, edge_data, ast_node=None):
 
 
 def is_wildcard_obj(G, obj):
+    """Check if an object is a wildcard object (unknown value)."""
     attrs = G.get_node_attr(obj)
     return (
         (attrs.get("type") in ["object", "array"] and attrs.get("code") == wildcard)

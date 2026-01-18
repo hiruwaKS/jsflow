@@ -35,6 +35,13 @@ logger = create_logger("main_logger", output_type="console")
 
 
 def setup_js_builtins(G: Graph):
+    """
+    Initialize all modeled JavaScript built-in objects and functions in the graph.
+
+    This is the main entry point for setting up the execution environment. It
+    registers constructors (Object, Array, etc.), prototypes, and global functions
+    (parseInt, setTimeout, etc.) so that the analysis can handle standard JS code.
+    """
     setup_object_and_function(G)
     setup_string(G)
     setup_number(G)
@@ -97,6 +104,14 @@ def opg_combine(G: Graph, call_ast, extra, _, *args):
 
 
 def setup_string(G: Graph):
+    """
+    Model the String constructor and its prototype methods.
+    
+    Registers:
+    - String constructor
+    - String.prototype
+    - Methods: match, replace, split, substr, toLowerCase, etc.
+    """
     string_cons = G.add_blank_func_to_scope(
         "String", scope=G.BASE_SCOPE, python_func=this_returning_func
     )
@@ -143,6 +158,14 @@ def setup_number(G: Graph):
 
 
 def setup_array(G: Graph):
+    """
+    Model the Array constructor and its prototype methods.
+    
+    Registers:
+    - Array constructor
+    - Array.isArray
+    - Array.prototype methods: push, pop, forEach, map, filter, reduce, etc.
+    """
     array_cons = G.add_blank_func_to_scope("Array", G.BASE_SCOPE, array_constructor)
     G.builtin_constructors.append(array_cons)
     G.array_cons = array_cons
@@ -232,6 +255,12 @@ def error_constructor(G: Graph, call_ast, extra, _, message=NodeHandleResult()):
 
 
 def setup_object_and_function(G: Graph):
+    """
+    Model Object and Function constructors and prototypes.
+    
+    This is critical as it sets up the base prototype chain:
+    Object.prototype <- Function.prototype <- Object
+    """
     # add Object (function)
     object_cons = G.add_blank_func_to_scope(
         "Object", scope=G.BASE_SCOPE, python_func=object_constructor
@@ -348,6 +377,19 @@ def array_p_for_each(
     callback=NodeHandleResult(),
     this=None,
 ):
+    """
+    Model Array.prototype.forEach.
+
+    Simulates the iteration over array elements. It:
+    1. Retrieves elements of the array.
+    2. Calls the callback function for each element found.
+    3. Handles potential "stack explosion" by limiting recursion depth (via G.for_stack).
+    
+    Args:
+        array: The array object.
+        callback: The callback function to execute.
+        this: Optional 'this' context for the callback.
+    """
     for arr in array.obj_nodes:
         for name_node in G.get_prop_name_nodes(arr):
             name = G.get_node_attr(name_node).get("name")
@@ -577,6 +619,14 @@ def array_p_push(
     arrays: NodeHandleResult,
     *tobe_added_objs: NodeHandleResult,
 ):
+    """
+    Model Array.prototype.push.
+
+    Adds elements to the end of an array.
+    - Updates the 'length' property.
+    - Handles branch-sensitive updates (copying the array if necessary).
+    - If length is unknown (wildcard), adds elements as wildcard properties.
+    """
     used_objs = set()
     if (
         extra.branches.get_last_choice_tag()
@@ -1749,6 +1799,15 @@ def string_p_replace(
     substrs=NodeHandleResult(),
     new_sub_strs=NodeHandleResult(),
 ):
+    """
+    Model String.prototype.replace.
+
+    Handles string replacement, including:
+    - String literals
+    - Regular expressions (simple cases)
+    - Callback functions as replacement
+    - Taint propagation from source string and replacement to result
+    """
     returned_objs = []
     unknown_return_obj = None  # we only add one unknown object
     for s in to_obj_nodes(G, strs, caller_ast):
@@ -2575,6 +2634,12 @@ def math_sqrt(G: Graph, caller_ast, extra, _, *args: NodeHandleResult):
 
 
 def setup_promise(G: Graph):
+    """
+    Model Promise and its related methods (then, catch, resolve, reject).
+    
+    Handles the asynchronous nature of Promises by scheduling callbacks
+    into the microtask queue (simulated).
+    """
     promise_cons = G.add_blank_func_to_scope(
         "Promise", scope=G.BASE_SCOPE, python_func=promise_constructor
     )
@@ -2645,6 +2710,12 @@ def promise_p_then(
     on_fulfilled=NodeHandleResult(),
     on_rejected=NodeHandleResult(),
 ):
+    """
+    Model Promise.prototype.then.
+
+    Chains a new Promise and schedules the on_fulfilled/on_rejected callbacks
+    to be executed when the parent promise settles.
+    """
     new_promise = G.add_obj_node(call_ast, None, None)
     old_promises = list(this.obj_nodes)
     saved_call_stack = G.call_stack

@@ -61,15 +61,27 @@ def get_path_text(G, path, caller):
 
 def traceback(G, vul_type, start_node=None):
     """
-    traceback from the leak point, the edge is OBJ_REACHES
-    Args:
-        G: the graph
-        vul_type: the type of vulernability, listed below
+    Trace back execution paths from vulnerability sinks to potential sources.
 
-    Return:
-        the paths include the objs,
-        the string description of paths,
-        the list of callers,
+    This function identifies potential sink functions (based on the vulnerability type)
+    and performs a backward traversal (DFS) on the graph to find all paths that reach
+    these sinks via data flow (OBJ_REACHES edges).
+
+    It serves as the first step in vulnerability detection by generating candidate
+    paths that are subsequently filtered by `vul_checking` using specific rules.
+
+    Args:
+        G (Graph): The graph object containing the analysis results.
+        vul_type (str): The type of vulnerability to check (e.g., 'xss', 'os_command').
+            This determines which functions are considered sinks.
+        start_node (str, optional): A specific starting node for the traceback.
+            Defaults to None, which means all relevant sinks in the graph are checked.
+
+    Returns:
+        tuple: A tuple containing:
+            - ret_pathes (list): List of candidate paths (lists of node IDs).
+            - res_path (str): String representation of the paths (for logging).
+            - caller_list (list): List of descriptions of the sink calls found.
     """
 
     def find_func_name(node):

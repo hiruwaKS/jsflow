@@ -160,6 +160,12 @@ def solve2(G: Graph, final_objs, initial_objs=None, contains=True):
         symbol(final_obj)
 
         # Backward traversal: follow CONTRIBUTES_TO edges to build constraint system
+        # The algorithm works by:
+        # 1. Starting from the sink object (final_obj)
+        # 2. Finding all nodes that contribute to its value via CONTRIBUTES_TO edges
+        # 3. Grouping contributors by operation (e.g., all operands of a concatenation)
+        # 4. Adding Z3 constraints that model these operations
+        # 5. Recursively processing contributor nodes until sources or literals are reached
         while q:
             head = q.pop(0)  # Current object we're building constraints for
             _contributors = []  # List of (operation_tag, contributor_node)
@@ -177,6 +183,7 @@ def solve2(G: Graph, final_objs, initial_objs=None, contains=True):
             
             # Sort and group contributors by operation type and group ID
             # This groups operands that belong to the same operation together
+            # e.g., for "a + b + c", a, b, and c will share the same group ID
             _contributors = sorted(_contributors)
             for opt, c in _contributors:
                 contributors[(opt[0], opt[1])].append(c)
@@ -187,13 +194,14 @@ def solve2(G: Graph, final_objs, initial_objs=None, contains=True):
                 
                 if op_name == "string_concat":
                     # Model string concatenation: result = str1 + str2 + ...
+                    # We check if all operands can be treated as strings
                     if check_string_operation(map(symbol, [head] + cl)):
                         cl_string_symbols = list(map(lambda x: symbol(x).string(), cl))
                         if len(cl_string_symbols) == 1:
-                            # Single operand: direct assignment
+                            # Single operand: direct assignment (result = operand)
                             solver.add(symbol(head).string() == cl_string_symbols[0])
                         else:
-                            # Multiple operands: concatenation
+                            # Multiple operands: concatenation (result = op1 + op2 + ...)
                             solver.add(
                                 symbol(head).string() == z3.Concat(*cl_string_symbols)
                             )
@@ -202,13 +210,14 @@ def solve2(G: Graph, final_objs, initial_objs=None, contains=True):
                         
                 elif op_name == "numeric_add":
                     # Model numeric addition: result = num1 + num2 + ...
+                    # We check if all operands can be treated as numbers
                     if check_number_operation(map(symbol, [head] + cl)):
                         cl_number_symbols = list(map(lambda x: symbol(x).number(), cl))
                         if len(cl_number_symbols) == 1:
-                            # Single operand: direct assignment
+                            # Single operand: direct assignment (result = operand)
                             solver.add(symbol(head).number() == cl_number_symbols[0])
                         else:
-                            # Multiple operands: sum
+                            # Multiple operands: sum (result = op1 + op2 + ...)
                             solver.add(
                                 symbol(head).number() == reduce(add, cl_number_symbols)
                             )
@@ -217,7 +226,8 @@ def solve2(G: Graph, final_objs, initial_objs=None, contains=True):
                         
                 elif op_name == "unknown_add":
                     # Operation type is unknown at analysis time - could be string or number
-                    # Try string first (more common for vulnerabilities)
+                    # This happens with the '+' operator in JS when types aren't statically known
+                    # Try string first (more common for vulnerabilities like XSS/Command Injection)
                     if check_string_operation(map(symbol, [head] + cl)):
                         cl_string_symbols = list(map(lambda x: symbol(x).string(), cl))
                         if len(cl_string_symbols) == 1:
@@ -227,7 +237,7 @@ def solve2(G: Graph, final_objs, initial_objs=None, contains=True):
                                 symbol(head).string() == z3.Concat(*cl_string_symbols)
                             )
                     elif check_number_operation(map(symbol, [head] + cl)):
-                        # Fall back to numeric addition
+                        # Fall back to numeric addition if string model fails
                         cl_number_symbols = list(map(lambda x: symbol(x).number(), cl))
                         if len(cl_number_symbols) == 1:
                             solver.add(symbol(head).number() == cl_number_symbols[0])

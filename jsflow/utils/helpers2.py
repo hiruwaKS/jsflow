@@ -285,6 +285,22 @@ def check_condition(G: Graph, ast_node, extra: ExtraInfo):
 
 
 def check_switch_var(G: Graph, ast_node, extra: ExtraInfo):
+    """
+    Evaluate switch case matching probability.
+
+    Compares the switch variable against a case expression to determine if the
+    case matches.
+
+    Args:
+        G (Graph): Graph.
+        ast_node: AST node of the case expression.
+        extra (ExtraInfo): Contains the switch variable in `extra.switch_var`.
+
+    Returns:
+        tuple: (probability, deterministic)
+            - probability (float): 0.0 to 1.0 indicating match likelihood.
+            - deterministic (bool): True if the result is certain.
+    """
     left_values = to_values(G, extra.switch_var, ast_node, for_prop=True)[0]
     right_values = to_values(
         G, opgen.handle_node(G, ast_node, extra), ast_node, for_prop=True
@@ -379,8 +395,20 @@ def to_obj_nodes(
     incl_existing_obj_nodes=True,
 ):
     """
-    Experimental. Converts 'values' field into object nodes.
-    Returns converted object nodes as a list.
+    Convert literal values in a NodeHandleResult into object nodes in the graph.
+
+    If the result contains raw values (e.g. from literal strings/numbers), this
+    creates corresponding object nodes for them.
+
+    Args:
+        G (Graph): Graph.
+        handle_result (NodeHandleResult): Result to process.
+        ast_node: AST node context for creating new objects.
+        incl_existing_obj_nodes (bool): Whether to include objects that were
+            already in the result. Defaults to True.
+
+    Returns:
+        list: List of object node IDs.
     """
     returned_objs = []
     # if ast_node is None:
@@ -411,8 +439,23 @@ def to_values(
     G: Graph, handle_result: NodeHandleResult, incl_existing_values=True, for_prop=False
 ):
     """
-    Experimental. Get values ('code' fields) in object nodes.
-    Returns values, sources and tags in lists.
+    Extract literal values from a NodeHandleResult.
+
+    Retrieves values from both the 'values' list and from the 'code' attribute
+    of object nodes in the result.
+
+    Args:
+        G (Graph): Graph.
+        handle_result (NodeHandleResult): Result to process.
+        incl_existing_values (bool): Include values already in result.values.
+        for_prop (bool): If True, formats values suitable for property lookup
+            (e.g., converting objects to strings).
+
+    Returns:
+        tuple: (values, sources, tags)
+            - values (list): List of literal values.
+            - sources (list): List of lists of source object nodes for each value.
+            - tags (list): List of tags associated with values.
     """
     values = []
     sources = []
@@ -455,6 +498,12 @@ def to_values(
 
 
 def combine_values(values, sources, *arg):
+    """
+    Deduplicate values and merge their sources.
+    
+    If multiple entries have the same value, they are combined into one entry,
+    and their sources are concatenated.
+    """
     d = defaultdict(lambda: [])
     for i, v in enumerate(values):
         d[v].extend(sources[i])
@@ -463,16 +512,18 @@ def combine_values(values, sources, *arg):
 
 def peek_variables(G: Graph, ast_node, extra: ExtraInfo):
     """
-    Experimental. Peek what variable is used in the statement and get
-    their object nodes. Currently, you must ensure the statement you
-    want tho peek is in the same scope as your current scope.
+    Look ahead to find variable references in a statement without full execution.
+
+    Useful for determining which variables are involved in a block or expression
+    before processing it fully.
 
     Args:
         G (Graph): Graph.
-        ast_node: AST node of the statement.
-        handling_func (Callable): Function to handle the variable node.
-            Normally you should use handle_var.
-        extra (ExtraInfo): Extra info.
+        ast_node: AST node to peek into.
+        extra (ExtraInfo): Context info.
+
+    Returns:
+        dict: Mapping of variable names to their object nodes found.
     """
     returned_dict = {}
     if (
