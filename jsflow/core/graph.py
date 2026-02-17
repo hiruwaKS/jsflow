@@ -5,6 +5,37 @@ This module wraps a NetworkX MultiDiGraph with a large collection of helpers
 for building AST, control-flow, data-flow, and object-property graphs. It is
 the backbone that other modules (opgen, solver, etc.) rely on to create and
 traverse analysis results.
+
+Graph Structure:
+----------------
+The graph contains several types of nodes and edges:
+
+Node Types:
+- AST nodes: Statements, expressions, functions from parsed JavaScript
+- Object nodes: JavaScript objects with properties (label: "Object")
+- Name nodes: Variable/function names (label: "Name")
+- Scope nodes: Variable scopes for lexical scoping
+
+Edge Types:
+- PARENT_OF: AST parent-child relationships
+- FLOWS_TO: Control flow between statements
+- REACHES: Data flow (variable-level)
+- OBJ_REACHES: Data flow (object-level)
+- POINTS_TO: Object references
+- CALLS: Function call relationships
+- SCOPE_TO_VAR: Scope-to-variable bindings
+- NAME_TO_OBJ: Variable-to-object bindings
+- OBJ_TO_PROP: Object-to-property relationships
+- CONTRIBUTES_TO: Value flow with operation tags
+
+Usage:
+------
+>>> G = Graph()
+>>> G.vul_type = 'os_command'
+>>> # After analysis, query the graph
+>>> sinks = G.get_nodes_by_type('AST_CALL')
+>>> for sink in sinks:
+...     paths = G._dfs_upper_by_edge_type(sink[0], 'OBJ_REACHES')
 """
 
 import networkx as nx

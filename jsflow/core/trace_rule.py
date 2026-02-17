@@ -1,10 +1,36 @@
 """
-Trace rule definitions used to filter or validate vulnerability paths.
+Trace Rule Definitions - Pattern matching rules for vulnerability path validation.
 
-The file hosts both legacy and newer rule implementations; TraceRule selects
-one based on `Graph.new_trace_rule`, providing a stable interface for callers
-that need to ask questions such as “does this path start in file X?” or “does
-it contain user input?”.
+This module provides a rule-based system for validating and filtering candidate
+vulnerability paths. After the analysis generates candidate paths from sources
+to sinks, trace rules are applied to determine which paths represent actual
+vulnerabilities.
+
+Rule System Overview:
+--------------------
+Each trace rule checks a specific property of a path:
+- Source validation: Does the path start from user input? (has_user_input)
+- Sink validation: Does the path end at a dangerous function? (end_with_func)
+- Sanitization checks: Does the path include sanitization? (not_exist_func)
+- File filtering: Should certain files be excluded? (start_within_file)
+
+Available Rules:
+---------------
+- has_user_input: Path must contain user-controlled data
+- exist_func: Path must include specified function(s)
+- not_exist_func: Path must NOT include specified function(s) (for sanitizers)
+- start_with_func: Path must begin at specified function
+- not_start_with_func: Path must NOT begin at specified function
+- end_with_func: Path must end at specified function (sink)
+- start_within_file: Path must originate in specified file(s)
+- not_start_within_file: Path must NOT originate in specified file(s)
+
+Implementation Versions:
+-----------------------
+- TraceRuleNew: Uses function scope tracking (funcid attribute)
+- TraceRuleOld: Uses call node iteration (for compatibility)
+
+The Graph.new_trace_rule flag determines which implementation is used.
 """
 
 

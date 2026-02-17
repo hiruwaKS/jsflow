@@ -21,7 +21,8 @@
   + https://github.com/formalsec/explode-js, https://github.com/formalsec/explodejs-datasets
 - **NODEMEDIC-FINE**
   + NDSS 25: NODEMEDIC-FINE: Automatic
-Detection and Exploit Synthesis for Node.js Vulnerabilities. Darion Cassel, Nuno Sabino, Min-Chien Hsu, Ruben Martins, and Limin Jia
+Detection and Exploit Synthesis for Node.js Vulnerabilities. Darion Cassel, Nuno Sabino, Min-Chien Hsu, Ruben Martins, and Limin Jia. 
+  + https://github.com/NodeMedicAnalysis/NodeMedic-FINE
 
 
 ## Dataset for JavaScript Vulnerability Detection

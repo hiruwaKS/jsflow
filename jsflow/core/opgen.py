@@ -1,5 +1,46 @@
 """
-This module is used to generate the object property graph from the AST.
+Operation Generator - Core symbolic execution engine for jsflow.
+
+This module generates the Object Property Graph (OPG) from the AST by performing
+symbolic execution on JavaScript code. It handles:
+
+1. AST Traversal: Visits each AST node type and creates corresponding graph elements
+2. Object Creation: Creates object nodes for JavaScript values (objects, arrays, functions)
+3. Data Flow Tracking: Tracks how values flow through operations and assignments
+4. Control Flow: Handles branches, loops, and function calls
+5. Function Modeling: Models built-in JavaScript functions and Node.js modules
+
+Key Functions:
+--------------
+- analyze_files(): Entry point for analyzing JavaScript files
+- analyze_string(): Analyze JavaScript from a string
+- generate_obj_graph(): Generate OPG from pre-parsed AST
+- handle_call(): Handle function call semantics
+- handle_node(): Dispatch handler for AST node types
+
+Symbolic Execution Model:
+-------------------------
+The symbolic executor maintains:
+- cur_objs: Current "this" object context
+- cur_scope: Current variable scope
+- cur_stmt: Current statement being processed
+- call_stack: For tracking nested calls
+
+Value tracking uses CONTRIBUTES_TO edges with operation tags:
+- (op_name, group_id, operand_index)
+- Example: ("string_concat", "abc123", 0) for first operand of concatenation
+
+Taint Propagation:
+------------------
+User input is marked as "tainted" during source modeling (http.js, process.js).
+Taint propagates through:
+- Variable assignments
+- Property access
+- Function returns
+- String/numeric operations
+
+The tainted flag is checked during vulnerability detection to identify
+whether user input reaches a sensitive sink.
 """
 
 import hashlib
