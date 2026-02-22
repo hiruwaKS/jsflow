@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jsflow"
+version = "1.0.0"
+description = "A static analysis framework for JavaScript vulnerability detection"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "func_timeout~=4.3.5",
+    "networkx~=2.4",
+    "sty~=1.0.0rc0",
+    "z3-solver~=4.8.8.0",
+    "tqdm~=4.48.2",
+    "openai",
+    "loguru",
+    "httpx",
+]
+
+[project.optional-dependencies]
+dev = [
+    "setuptools",
+    "pytest",
+    "pytest-cov",
+]
+
+[project.scripts]
+jsflow = "jsflow.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["jsflow*"]

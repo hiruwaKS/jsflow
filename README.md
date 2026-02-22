@@ -25,6 +25,14 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed architecture infor
 
 ## Installation
 
+### Via pyproject.toml (Recommended)
+
+```bash
+pip install -e .
+```
+
+This installs the package in editable mode with all dependencies defined in `pyproject.toml`.
+
 ### System Requirements
 
 - **Node.js and npm**: Required for JavaScript AST parsing dependencies
@@ -57,7 +65,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed architecture infor
 
 4. **Install Python dependencies**:
    ```bash
-   pip install -r requirements.txt
+   pip install -e .
    ```
 
 Alternatively, you can use the provided installation script:

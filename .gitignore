@@ -1,9 +1,12 @@
+*egg-info*
 docs/build/
 .sisyphus
 .codex
 .claude
 .cursor
 .coverage
+.opencode
+.kilo
 # global
 *.pyc
 logs
