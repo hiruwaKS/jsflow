@@ -20,6 +20,7 @@ from .core.opgen import (
 )
 from .vuln.vul_checking import traceback, vul_checking, get_path_text
 
+import logging
 
 def setup_log_directory():
     """

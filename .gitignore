@@ -97,3 +97,9 @@ Icon
 Network Trash Folder
 Temporary Items
 .apdisk
+
+
+# tmps
+/tmp
+/output
+/build
