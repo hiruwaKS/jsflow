@@ -6,8 +6,8 @@
     "configurations": [
 
         {
-            "name": "Pythonjsflow",
-            "type": "python",
+            "name": "Python Jsflow on test.js",
+            "type": "debugpy",
             "request": "launch",
             "module": "jsflow",
             "cwd": "${workspaceFolder}/",
@@ -19,6 +19,13 @@
                 "tmp/test.js"
             ],
             "console": "integratedTerminal",
+        },
+        {
+            "name": "Python: Run Benchmark",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/evaluation/run_bench.py",
+            "cwd": "${workspaceFolder}",
         }
     ]
 }
