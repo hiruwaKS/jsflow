@@ -137,19 +137,19 @@ def run_jsflow(
             # Drain pipes (best-effort); process is terminated at this point.
             try:
                 stdout, stderr = proc.communicate(timeout=2.0)
-                if stderr != "":
-                    raise Exception(f"stderr: {stderr}")
+                if "Error: " in stderr:
+                    raise Exception(f"Error: run_jsflow (after timeout) subprocess stderr\n{stderr}")
             except Exception:
-                raise Exception("")
+                raise Exception(f"Error: run_jsflow unexpected")
             raise TimeoutError(stdout)
 
         elapsed_time = time.time() - start_time
-        if stderr != "":
-            raise Exception(f"stderr: {stderr}")
+        if "Error: " in stderr:
+            raise Exception(f"Error: run jsflow subprocess stderr\n{stderr}")
         output = stdout or ""
         clean_output = re.sub(r"\x1b\[[0-9;]*m", "", output)
         # detected = "Detection: successful" in clean_output or "success:" in clean_output
-        detected = "Detection: successful" in clean_output # or "success:" in clean_output
+        detected = "Detection: successful" in clean_output
         return detected, elapsed_time, output
     except KeyboardInterrupt as e:
         if proc is not None:
@@ -209,12 +209,10 @@ def process_case(
         status = "timeout"
     except Exception as e:
         status = "error"
-        if "Parse (to AST) error: " in str(e):
-            error_type = "parse to AST error"
-        elif "Parse (to CSV) error: " in str(e):
-            error_type = "parse to CSV error"
+        if "Error: esprima_parse subprocess stderr\n" in str(e):
+            error_type = "parse"
         else:
-            error_type = "graph construction error"
+            error_type = "graph"
 
     print(f"  {cwe_id}/{case_name}: {elapsed_time:.1f}s, detected={detected}, status={status}, error_type={error_type}")
 
@@ -239,15 +237,15 @@ def evaluate_dataset(
     """Run jsflow on a dataset and collect metrics."""
     cases = find_cases(dataset_dir)
     # one case to debug
-    case_num = 10
-    cases = cases[case_num:]
+    # case_num = 220
+    # cases = cases[case_num:221]
 
     results = {
         "total_cases": len(cases),
         "by_cwe": {cwe: {"total": 0, "detected": 0, "timeout": 0, "error": 0, "times": []}
                    for cwe in CWE_TO_VULN_TYPE},
         "cases": [],
-        "detection_summary": {"true_positive": 0, "false_negative": 0, "timeout": 0, "error": 0, "parse to AST error": 0, "parse to CSV error": 0, "graph construction error": 0, "unexpected": 0},
+        "detection_summary": {"true_positive": 0, "false_negative": 0, "timeout": 0, "error": 0, "parse": 0, "graph": 0, "unexpected": 0},
         "times": [],
     }
 
@@ -279,7 +277,7 @@ def evaluate_dataset(
                         "detected": False,
                         "time": 0,
                         "status": "error",
-                        "error_type": "",
+                        "error_type": "Error processing",
                     }
 
                 cwe_id = case_result["cwe"]
@@ -332,7 +330,7 @@ def print_metrics(results: Dict):
     recall = tp / analyzed if analyzed > 0 else 0
 
     print(f"\nOverall: {results['total_cases']} cases | TP: {tp} | FN: {fn} | "
-          f"Timeouts: {timeout} | Errors: {errors} | Parse to AST Errors: {s['parse to AST error']} | Parse to CSV Errors: {s['parse to CSV error']} | Graph Errors: {s['graph construction error']} | Unexpected Errors: {s['unexpected']}")
+          f"Timeouts: {timeout} | Errors: {errors} | Parse Errors: {s['parse']} | Graph Errors: {s['graph']} | Unexpected Errors: {s['unexpected']}")
     if analyzed > 0:
         print(f"Recall: {recall:.2%} ({tp}/{analyzed})")
 

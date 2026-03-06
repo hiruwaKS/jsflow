@@ -56,7 +56,7 @@ function searchModule(moduleName, requiredBy, disableBuiltinPackages = false) {
         let currentPath = path.resolve(p, moduleName);
         // search file
         // console.error(currentPath);
-        if (fs.existsSync(currentPath) && fs.statSync(currentPath).isFile()) {
+        if (currentPath.endsWith('.js') && fs.existsSync(currentPath) && fs.statSync(currentPath).isFile()) {
             console.error(`Package ${moduleName} found at ${currentPath}`.white.inverse);
             found = true;
             modulePath = currentPath;
@@ -69,7 +69,7 @@ function searchModule(moduleName, requiredBy, disableBuiltinPackages = false) {
             // console.error(currentPath);
             if (fs.existsSync(currentPath) && fs.statSync(currentPath).isDirectory()) {
                 mainPath = searchMain(currentPath);
-                if (mainPath != null) {
+                if (mainPath != null && mainPath.endsWith('.js') && fs.existsSync(mainPath) && fs.statSync(mainPath).isFile()) {
                     console.error(`Package ${moduleName} found at ${mainPath}.`.white.inverse);
                     found = true;
                     modulePath = currentPath;
@@ -110,7 +110,7 @@ function searchMain(packagePath) {
     if (fs.existsSync(mainPath) && fs.statSync(mainPath).isDirectory()) {
         mainPath = path.resolve(mainPath, 'index.js');
     }
-    if (fs.existsSync(mainPath) && fs.statSync(mainPath).isFile()) {
+    if (fs.existsSync(mainPath) && fs.statSync(mainPath).isFile() && mainPath.endsWith('.js')) {
         return mainPath;
     }
     mainPath += '.js';

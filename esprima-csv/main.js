@@ -12,6 +12,7 @@ const os = require('os');
 const ansicolor = require('ansicolor').nice;
 const Readable = require('stream').Readable;
 const program = require('commander');
+const { log, assert } = require('console');
 program
     .version('0.12.2')
     .usage('<filename or package name> [options]')
@@ -3071,7 +3072,11 @@ function walkDir(dir, parentNodeId, callback) {
 };
 
 function analyze(filePath, parentNodeId) {
-    // read the file
+    if (filePath && typeof filePath === 'string' && !filePath.endsWith('.js')) {
+        console.log("Error: file path invalid")
+        return;
+    }
+        // read the file
     filename = filePath || 'stdin';
     if (analyzedModules.includes(filename)){
         console.log(("Skipping " + filename).white.inverse);
@@ -3118,13 +3123,13 @@ function analyze(filePath, parentNodeId) {
             attachComment: true
         });
         if (root.errors && root.errors.length > 0){
-            console.log('Error: occurred when generating AST:'.lightRed.inverse);
+            console.log('Error: esprima parsing: '.lightRed.inverse);
             for (err of root.errors){
                 console.log(err.toString().lightRed);
             }
         }
     } catch (e) {
-        console.log(`Error: ${e}`);
+        console.log(`Error: esprima parsing: ${e}`);
     }
     if (!stdoutMode){
         console.dir(root);
