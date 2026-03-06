@@ -89,7 +89,7 @@ function searchModule(moduleName, requiredBy, disableBuiltinPackages = false) {
         }
     }
     if (!found) {
-        console.error(`Error: required package ${moduleName} not found.`.lightRed.inverse);
+        console.error(`Warning: required package ${moduleName} not found.`.lightRed.inverse);
     }
     return [mainPath, modulePath];
 }

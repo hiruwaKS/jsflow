@@ -3118,13 +3118,13 @@ function analyze(filePath, parentNodeId) {
             attachComment: true
         });
         if (root.errors && root.errors.length > 0){
-            console.log('Errors occurred when generating AST:'.lightRed.inverse);
+            console.log('Error: occurred when generating AST:'.lightRed.inverse);
             for (err of root.errors){
                 console.log(err.toString().lightRed);
             }
         }
     } catch (e) {
-        console.log(e);
+        console.log(`Error: ${e}`);
     }
     if (!stdoutMode){
         console.dir(root);

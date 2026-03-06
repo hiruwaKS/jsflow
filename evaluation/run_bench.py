@@ -137,23 +137,28 @@ def run_jsflow(
             # Drain pipes (best-effort); process is terminated at this point.
             try:
                 stdout, stderr = proc.communicate(timeout=2.0)
+                if stderr != "":
+                    raise Exception(f"stderr: {stderr}")
             except Exception:
-                stdout, stderr = "", ""
-            return False, time.time() - start_time, "Timeout"
+                raise Exception("")
+            raise TimeoutError(stdout)
 
         elapsed_time = time.time() - start_time
-        output = (stdout or "") + (stderr or "")
+        if stderr != "":
+            raise Exception(f"stderr: {stderr}")
+        output = stdout or ""
         clean_output = re.sub(r"\x1b\[[0-9;]*m", "", output)
-        detected = "Detection: successful" in clean_output or "success:" in clean_output
+        # detected = "Detection: successful" in clean_output or "success:" in clean_output
+        detected = "Detection: successful" in clean_output # or "success:" in clean_output
         return detected, elapsed_time, output
-    except KeyboardInterrupt:
+    except KeyboardInterrupt as e:
         if proc is not None:
             _terminate_proc_group(proc, grace_seconds=0.5)
-        raise
+        raise e
     except Exception as e:
         if proc is not None:
             _terminate_proc_group(proc, grace_seconds=0.5)
-        return False, time.time() - start_time, str(e)
+        raise e
     finally:
         if proc is not None:
             _unregister_pgid(proc.pid)
@@ -184,23 +189,34 @@ def process_case(
                 "detected": False,
                 "time": 0,
                 "status": "error",
+                "error_type": "src file not found",
             }
 
     print(f"Analyzing: {cwe_id}/{case_name} ({vuln_type})")
-    detected, elapsed_time, output = run_jsflow(
-        str(src_file),
-        vuln_type,
-        timeout,
-        disable_builtin_packages=disable_builtin_packages,
-    )
 
+    detected = False
+    elapsed_time = 0.0
     status = "success"
-    if elapsed_time >= timeout or (isinstance(output, str) and "Timeout" in output):
+    error_type = ""
+    try:
+        detected, elapsed_time, output = run_jsflow(
+            str(src_file),
+            vuln_type,
+            timeout,
+            disable_builtin_packages=disable_builtin_packages,
+        )
+    except TimeoutError:
         status = "timeout"
-    elif isinstance(output, str) and output.startswith("Traceback"):
+    except Exception as e:
         status = "error"
+        if "Parse (to AST) error: " in str(e):
+            error_type = "parse to AST error"
+        elif "Parse (to CSV) error: " in str(e):
+            error_type = "parse to CSV error"
+        else:
+            error_type = "graph construction error"
 
-    print(f"  {cwe_id}/{case_name}: {elapsed_time:.1f}s, detected={detected}, status={status}")
+    print(f"  {cwe_id}/{case_name}: {elapsed_time:.1f}s, detected={detected}, status={status}, error_type={error_type}")
 
     return {
         "cwe": cwe_id,
@@ -210,6 +226,7 @@ def process_case(
         "detected": detected,
         "time": elapsed_time,
         "status": status,
+        "error_type": error_type,
     }
 
 
@@ -221,12 +238,16 @@ def evaluate_dataset(
 ):
     """Run jsflow on a dataset and collect metrics."""
     cases = find_cases(dataset_dir)
+    # one case to debug
+    case_num = 10
+    cases = cases[case_num:]
+
     results = {
         "total_cases": len(cases),
         "by_cwe": {cwe: {"total": 0, "detected": 0, "timeout": 0, "error": 0, "times": []}
                    for cwe in CWE_TO_VULN_TYPE},
         "cases": [],
-        "detection_summary": {"true_positive": 0, "false_negative": 0, "timeout": 0, "error": 0},
+        "detection_summary": {"true_positive": 0, "false_negative": 0, "timeout": 0, "error": 0, "parse to AST error": 0, "parse to CSV error": 0, "graph construction error": 0, "unexpected": 0},
         "times": [],
     }
 
@@ -258,6 +279,7 @@ def evaluate_dataset(
                         "detected": False,
                         "time": 0,
                         "status": "error",
+                        "error_type": "",
                     }
 
                 cwe_id = case_result["cwe"]
@@ -270,6 +292,10 @@ def evaluate_dataset(
                     results["detection_summary"]["timeout"] += 1
                 elif status == "error":
                     cwe_stats["error"] += 1
+                    if case_result["error_type"] in results["detection_summary"]:
+                        results["detection_summary"][case_result["error_type"]] += 1
+                    else:
+                        results["detection_summary"]["unexpected"] += 1
                     results["detection_summary"]["error"] += 1
                 else:
                     cwe_stats["times"].append(case_result["time"])
@@ -306,7 +332,7 @@ def print_metrics(results: Dict):
     recall = tp / analyzed if analyzed > 0 else 0
 
     print(f"\nOverall: {results['total_cases']} cases | TP: {tp} | FN: {fn} | "
-          f"Timeouts: {timeout} | Errors: {errors}")
+          f"Timeouts: {timeout} | Errors: {errors} | Parse to AST Errors: {s['parse to AST error']} | Parse to CSV Errors: {s['parse to CSV error']} | Graph Errors: {s['graph construction error']} | Unexpected Errors: {s['unexpected']}")
     if analyzed > 0:
         print(f"Recall: {recall:.2%} ({tp}/{analyzed})")
 

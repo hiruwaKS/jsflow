@@ -26,7 +26,12 @@ def esprima_parse(path="-", args=[], input=None, print_func=print):
         stderr=subprocess.PIPE,
     )
     stdout, stderr = proc.communicate(input)
-    print_func(stderr)
+    if "Error: " in stderr:
+        print_func(stderr)
+        if "Error: occurred when generating AST" in stderr:
+            raise Exception(f"Parse (to AST) error: {stderr}")
+        else:
+            raise Exception(f"Parse (to CSV) error: {stderr}")
     return stdout
 
 

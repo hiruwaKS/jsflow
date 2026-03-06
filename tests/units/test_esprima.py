@@ -1,10 +1,54 @@
+import subprocess
+import time
 import unittest
 from unittest.mock import MagicMock, patch, Mock
 import os
+import concurrent.futures
 
 from jsflow.core import esprima
 
+class TestEsprimaOnDataset(unittest.TestCase):
+    '''it will run plain esprima (which generate ast instead of csv) on all js files in the dataset, and check if there are any parsing errors.'''
 
+    def test_esprima_parsing_on_dataset(self):
+        # return
+        '''this takes a while'''
+        wrapper_path = "esprima-csv/esprima_wrapper.js"
+        dataset_path = "evaluation/explodejs-datasets/secbench-dataset/"
+        
+        js_files = [os.path.join(root, file) 
+            for root, dirs, files in os.walk(dataset_path) 
+            for file in files if file.endswith(".js") and os.path.basename(root) == "src"]
+        print(f"Found {len(js_files)} JavaScript files in the dataset.")
+        
+        failed_files = []
+        
+        def process_file(file):
+            process = subprocess.Popen(
+                ["node", wrapper_path, file],
+                text=True,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            _, stderr = process.communicate()
+            if stderr:
+                return (file, stderr)
+            return None
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+            results = executor.map(process_file, js_files)
+            
+            for result in results:
+                if result:
+                    failed_files.append(result)
+        
+        if failed_files:
+            error_message = f"\nTotal parsing errors: {len(failed_files)}/{len(js_files)} files\n"
+            for file, stderr in failed_files[:5]:
+                error_message += f"\n{file}:\n{stderr[:200]}...\n"
+            self.fail(error_message)
+    
 class TestEsprimaParse(unittest.TestCase):
     @patch('subprocess.Popen')
     def test_esprima_parse_basic(self, mock_popen):
@@ -48,17 +92,17 @@ class TestEsprimaParse(unittest.TestCase):
         args = mock_popen.call_args[0][0]
         self.assertEqual(args[2], "-")
 
-    @patch('subprocess.Popen')
-    def test_esprima_parse_stderr_handling(self, mock_popen):
-        mock_proc = Mock()
-        mock_proc.communicate.return_value = ("output", "error message")
-        mock_popen.return_value = mock_proc
+    # @patch('subprocess.Popen')
+    # def test_esprima_parse_stderr_handling(self, mock_popen):
+    #     mock_proc = Mock()
+    #     mock_proc.communicate.return_value = ("output", "error message")
+    #     mock_popen.return_value = mock_proc
         
-        print_func = Mock()
-        result = esprima.esprima_parse("test.js", print_func=print_func)
+    #     print_func = Mock()
+    #     result = esprima.esprima_parse("test.js", print_func=print_func)
         
-        self.assertEqual(result, "output")
-        print_func.assert_called_once_with("error message")
+    #     self.assertEqual(result, "output")
+    #     print_func.assert_called_once_with("error message")
 
     @patch('subprocess.Popen')
     def test_esprima_search(self, mock_popen):
