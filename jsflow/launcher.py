@@ -329,6 +329,7 @@ def main():
     )
     if args.input_file:
         if args.input_file == "-":
+            G.entry_file_path = "stdin"
             if args.module:
                 raise argparse.ArgumentTypeError(
                     "stdin cannot be used with module mode"
@@ -339,6 +340,7 @@ def main():
         else:
             G.entry_file_path = args.input_file
             if args.module:
+                G.entry_file_path = f"stdin (var main_func=require('{args.input_file}'))"
                 # pretend another file is requiring this module
                 script = f"var main_func=require('{args.input_file}');"
                 analyze_string(G, script, generate_graph=True)
@@ -351,6 +353,7 @@ def main():
         # analyze from CSVs
         G.import_from_CSV("./nodes.csv", "./rels.csv")
         generate_obj_graph(G, "0")
+        G.print_graph()
     total_num_stat = G.get_total_num_statements()
     print("Statements:", len(G.covered_stat), total_num_stat)
     print("Functions:", len(G.covered_func), G.get_total_num_functions())

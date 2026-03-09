@@ -231,6 +231,8 @@ class Graph:
 
         csv.field_size_limit(2**31 - 1)
 
+        self.files_parsed = []
+
         class joern_dialect(csv.excel_tab):
             doublequote = False
             escapechar = "\\"
@@ -1023,7 +1025,7 @@ class Graph:
 
     # name nodes and object nodes
 
-    def add_obj_node(self, ast_node=None, js_type="object", value=None):
+    def add_obj_node(self, ast_node=None, js_type="object", value=None, name=None):
         """
         Add an object node (including literal).
 
@@ -1150,6 +1152,9 @@ class Graph:
 
         if value is not None:
             self.set_node_attr(obj_node, ("code", value))
+        
+        if name is not None:
+            self.set_node_attr(obj_node, ("name", name))
 
         return obj_node
 
@@ -1215,7 +1220,11 @@ class Graph:
             name_node = self.add_prop_name_node(prop_name, parent_obj)
 
         if tobe_added_obj is None:
-            tobe_added_obj = self.add_obj_node(ast_node, js_type, value)
+            parent_name = self.get_node_attr(parent_obj).get("name")
+            if parent_name == "":
+                parent_name = "anon"
+            name = f"{parent_name}.{prop_name}"
+            tobe_added_obj = self.add_obj_node(ast_node, js_type, value, name)
 
         self.add_edge(name_node, tobe_added_obj, {"type:TYPE": "NAME_TO_OBJ"})
         if self.affected_name_nodes:
@@ -1280,7 +1289,7 @@ class Graph:
         if tobe_added_obj == None:
             # here we do not add obj to current obj when add to scope
             # we just add a obj to scope
-            tobe_added_obj = self.add_obj_node(ast_node, js_type, value)
+            tobe_added_obj = self.add_obj_node(ast_node, js_type, value, name)
 
         self.add_edge(name_node, tobe_added_obj, {"type:TYPE": "NAME_TO_OBJ"})
         if self.affected_name_nodes:
@@ -1312,7 +1321,8 @@ class Graph:
         name node -> new obj / tobe_added_obj
         """
         if tobe_added_obj is None:
-            tobe_added_obj = self.add_obj_node(ast_node, js_type, value)
+            name = self.get_node_attr(name_node).get("name")
+            tobe_added_obj = self.add_obj_node(ast_node, js_type, value, name)
 
         self.add_edge(name_node, tobe_added_obj, {"type:TYPE": "NAME_TO_OBJ"})
         if self.affected_name_nodes:
@@ -1954,7 +1964,7 @@ class Graph:
         """
         ast_node = self.add_blank_func(func_name)
         if func_obj is None:
-            func_obj = self.add_obj_node(ast_node, "function")
+            func_obj = self.add_obj_node(ast_node, "function", None, func_name)
             self.set_node_attr(func_obj, ("name", func_name))
         else:
             self.convert_obj_node_type_to_function(func_obj, ast_node)
@@ -2000,18 +2010,21 @@ class Graph:
         entry_id = self._get_new_nodeid()
         self.add_node(entry_id)
         self.set_node_attr(entry_id, ("funcid:int", func_ast))
+        self.set_node_attr(entry_id, ("name", f"{func_name}#entry"))
         self.set_node_attr(entry_id, ("type", "CFG_FUNC_ENTRY"))
         self.set_node_attr(entry_id, ("labels:label", "Artificial"))
 
         exit_id = self._get_new_nodeid()
         self.add_node(exit_id)
         self.set_node_attr(exit_id, ("funcid:int", func_ast))
+        self.set_node_attr(exit_id, ("name", f"{func_name}#exit"))
         self.set_node_attr(exit_id, ("type", "CFG_FUNC_EXIT"))
         self.set_node_attr(exit_id, ("labels:label", "Artificial"))
 
         null_id = self._get_new_nodeid()
         self.add_node(null_id)
         self.set_node_attr(null_id, ("funcid:int", func_ast))
+        self.set_node_attr(null_id, ("name", f"{func_name}#null"))
         self.set_node_attr(null_id, ("type", "NULL"))
         self.set_node_attr(null_id, ("labels:label", "Artificial_AST"))
         self.set_node_attr(null_id, ("childnum:int", 1))
@@ -2019,6 +2032,7 @@ class Graph:
         params_id = self._get_new_nodeid()
         self.add_node(params_id)
         self.set_node_attr(params_id, ("funcid:int", func_ast))
+        self.set_node_attr(params_id, ("name", f"{func_name}#params"))
         self.set_node_attr(params_id, ("type", "AST_PARAM_LIST"))
         self.set_node_attr(params_id, ("labels:label", "Artificial_AST"))
         self.set_node_attr(params_id, ("childnum:int", 2))
@@ -2026,6 +2040,7 @@ class Graph:
         body_id = self._get_new_nodeid()
         self.add_node(body_id)
         self.set_node_attr(body_id, ("funcid:int", func_ast))
+        self.set_node_attr(body_id, ("name", f"{func_name}#body"))
         self.set_node_attr(body_id, ("type", "AST_STMT_LIST"))
         self.set_node_attr(body_id, ("labels:label", "Artificial_AST"))
         self.set_node_attr(body_id, ("childnum:int", 3))
@@ -2033,6 +2048,7 @@ class Graph:
         dummy_stmt_id = self._get_new_nodeid()
         self.add_node(dummy_stmt_id)
         self.set_node_attr(dummy_stmt_id, ("funcid:int", func_ast))
+        self.set_node_attr(dummy_stmt_id, ("name", f"{func_name}#dummy_stmt"))
         self.set_node_attr(dummy_stmt_id, ("type", "DUMMY_STMT"))
         self.set_node_attr(dummy_stmt_id, ("labels:label", "Artificial_AST"))
         self.set_node_attr(dummy_stmt_id, ("childnum:int", 0))
@@ -2131,11 +2147,11 @@ class Graph:
             name="null", value="null", scope=self.BASE_SCOPE
         )
 
-        self.true_obj = self.add_obj_node(None, "boolean", "true")
+        self.true_obj = self.add_obj_node(None, "boolean", "true", "TRUE")
         self.add_obj_to_name(
             "true", scope=self.BASE_SCOPE, tobe_added_obj=self.true_obj
         )
-        self.false_obj = self.add_obj_node(None, "boolean", "false")
+        self.false_obj = self.add_obj_node(None, "boolean", "false", "FALSE")
         self.add_obj_to_name(
             "false", scope=self.BASE_SCOPE, tobe_added_obj=self.false_obj
         )
@@ -2148,16 +2164,16 @@ class Graph:
         # self.set_node_attr(self.tainted_user_input, ('tainted', True))
 
         # setup JavaScript built-in values
-        self.undefined_obj = self.add_obj_node(None, "undefined", value="undefined")
+        self.undefined_obj = self.add_obj_node(None, "undefined", value="undefined", name="UNDEFINED")
         self.add_obj_to_name(
             "undefined", scope=self.BASE_SCOPE, tobe_added_obj=self.undefined_obj
         )
-        self.infinity_obj = self.add_obj_node(None, "number", "Infinity")
+        self.infinity_obj = self.add_obj_node(None, "number", "Infinity", "INF")
         self.add_obj_to_name(
             "Infinity", scope=self.BASE_SCOPE, tobe_added_obj=self.infinity_obj
         )
-        self.negative_infinity_obj = self.add_obj_node(None, "number", "-Infinity")
-        self.nan_obj = self.add_obj_node(None, "number", float("nan"))
+        self.negative_infinity_obj = self.add_obj_node(None, "number", "-Infinity", "-INF")
+        self.nan_obj = self.add_obj_node(None, "number", float("nan"), "FLOAT_NAN")
         self.add_obj_to_name("NaN", scope=self.BASE_SCOPE, tobe_added_obj=self.nan_obj)
 
         self.add_obj_as_prop(
@@ -2236,17 +2252,17 @@ class Graph:
         if py_obj is None:
             return self.null_obj
         elif type(py_obj) in [int, float]:
-            return self.add_obj_node(ast_node=ast_node, js_type="number", value=py_obj)
+            return self.add_obj_node(ast_node=ast_node, js_type="number", value=py_obj, name=str(py_obj))
         elif type(py_obj) is str:
-            return self.add_obj_node(ast_node=ast_node, js_type="string", value=py_obj)
+            return self.add_obj_node(ast_node=ast_node, js_type="string", value=py_obj, name=py_obj)
         elif type(py_obj) is list:
-            obj = self.add_obj_node(ast_node=ast_node, js_type="array", value=py_obj)
+            obj = self.add_obj_node(ast_node=ast_node, js_type="array", value=py_obj, name=str(py_obj))
             for i, u in enumerate(py_obj):
                 member = self.generate_obj_graph_for_python_obj(u)
                 self.add_obj_as_prop(prop_name=i, tobe_added_obj=member, parent_obj=obj)
             return obj
         elif type(py_obj) is dict:
-            obj = self.add_obj_node(ast_node=ast_node, js_type="object", value=py_obj)
+            obj = self.add_obj_node(ast_node=ast_node, js_type="object", value=py_obj, name=str(py_obj))
             for k, v in py_obj.items():
                 member = self.generate_obj_graph_for_python_obj(v)
                 self.add_obj_as_prop(prop_name=k, tobe_added_obj=member, parent_obj=obj)
@@ -2686,3 +2702,100 @@ class Graph:
             new_path.extend(new_nodes)
         new_path.append(path[-1])
         return new_path
+    def node_summary(self, node):
+        # alias
+        # caller_exec_counter
+        # classname
+        # childnum:int
+        # code
+        # doccomment
+        # endlineno
+        # fake_arg
+        # flags:string[]
+        # funcid:int
+        # func_name
+        # labels:label
+        # lineno:int
+        # local_dist
+        # module_exports
+        # name
+        # namespace
+        # parent_scope
+        # parent_scope_this
+        # pythonfunc
+        # statically_declared
+        # tainted
+        # type
+        name = node.get("name", "anon")
+        labelslabel = node.get("labels:label", "")
+        type_ = node.get("type", "")
+        if type_ != "":
+            type_ = f"{labelslabel}:{type_}"
+        else:
+            type_ = labelslabel
+        code_or_value_str = node.get("code", "")
+        if code_or_value_str != "":
+            code_or_value_str = f" at \"{code_or_value_str}\"" if str(labelslabel) != "Object" else f" with value {code_or_value_str}"
+        module_exports_str = node.get("module_exports","")
+        if module_exports_str != "":
+            module_exports_str = f"[module_exports: {module_exports_str}]"
+        return f"<{type_}>{name}{code_or_value_str}{module_exports_str}"
+    def print_subgraph_from_edge(self, edge_types: list, f):
+        for n in self.graph.nodes:
+            out_edges = self.get_out_edges(n)
+            out_edges = [e for e in out_edges if e[3].get("type:TYPE") in edge_types]
+            if len(out_edges) == 0:
+                continue
+            f.write(f"\t- {n}{self.node_summary(self.get_node_attr(n))}\n")
+            for e in out_edges:
+                edge_type = e[3].get("type:TYPE")
+                if edge_type == "":
+                    edge_type = "ANON"
+                f.write(f"\t\t- {edge_type}: {e[1]}{self.node_summary(self.get_node_attr(e[1]))}\n")
+    def print_graph(self):
+        with open("tmp/graph.txt", "w") as f:
+            f.write(f"\n- basis:\n")
+            f.write(f"\t- log_dir: {self.log_dir}\n")
+            f.write(f"\t- logger level: {self.logger.level}\n")
+            f.write(f"\t- print: {self.print}\n")
+            f.write(f"\t- entry_file_path: {self.entry_file_path}\n")
+            f.write(f"\t- func_entry_point: {self.func_entry_point}\n")
+            f.write(f"\t- run_all (as a module): {self.run_all}\n")
+            f.write(f"\t- exit_when_found: {self.exit_when_found}\n")
+            f.write(f"\t- disable_builtin_packages: {self.disable_builtin_packages}\n")
+            f.write(f"\n- vul type:\n")
+            f.write(f"\t- vul_type: {self.vul_type}\n")
+            f.write(f"\t- check_proto_pollution: {self.check_proto_pollution}\n")
+            f.write(f"\t- check_ipt: {self.check_ipt}\n")
+            f.write(f"\n- parser:\n")
+            f.write(f"\t- using esprima...\n")
+            f.write(f"\t- parsed_files: {self.files_parsed}\n")
+            f.write(f"\n- graph gen:\n")
+            f.write(f"\t- two_pass: {self.two_pass}\n")
+            f.write(f"\t- coarse_only: {self.coarse_only}\n")
+            f.write(f"\t- function calls:\n")
+            f.write(f"\t\t- call_limit: {self.call_limit}\n")
+            f.write(f"\t\t- rough_call_dist: {self.rough_call_dist}\n")
+            f.write(f"\t\t- function_time_limit: {self.function_time_limit}\n")
+            f.write(f"\t- single_branch: {self.single_branch}\n")
+            f.write(f"\t- new_trace_rule: {self.new_trace_rule}\n")
+            f.write(f"\t\t- no_file_based: {self.no_file_based}\n")
+            f.write(f"\n- exploit:\n")
+            f.write(f"\t- auto_exploit: {self.auto_exploit}\n")
+            f.write(f"\n- ast:\n")
+            self.print_subgraph_from_edge(edge_types=["PARENT_OF"], f=f)
+            f.write(f"\n- call graph:\n")
+            self.print_subgraph_from_edge(edge_types=["CALLS"], f=f)
+            f.write(f"\n- cfg:\n")
+            self.print_subgraph_from_edge(edge_types=["FLOWS_TO"], f=f)
+            f.write(f"\n- object reach/reference graph:\n")
+            self.print_subgraph_from_edge(edge_types=["OBJ_REACHES", "REACHES", "POINTS_TO"], f=f)
+            f.write(f"\n- object property graph:\n")
+            self.print_subgraph_from_edge(edge_types=["OBJ_TO_PROP"], f=f)
+            f.write(f"\n- value flow graph:\n")
+            self.print_subgraph_from_edge(edge_types=["CONTRIBUTES_TO"], f=f)
+            f.write(f"\n- scope graph:\n")
+            self.print_subgraph_from_edge(edge_types=["SCOPE_TO_VAR"], f=f)
+            f.write(f"\n- name obj binding:\n")
+            self.print_subgraph_from_edge(edge_types=["NAME_TO_OBJ"], f=f)
+            f.write(f"======================================\n")

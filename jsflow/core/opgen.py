@@ -542,7 +542,7 @@ def find_prop(
 
         if prop_name == wildcard:
             if G.first_pass:
-                obj = G.add_obj_node(ast_node, None, wildcard)
+                obj = G.add_obj_node(ast_node, None, wildcard, wildcard)
                 add_arg_paths(obj, prop_name, prop_name_sources)
                 prop_obj_nodes.add(obj)
                 continue
@@ -1003,7 +1003,7 @@ def handle_assign(G, ast_node, extra=None, right_override=None):
         children = G.get_ordered_ast_child_nodes(left)
         if G.get_node_attr(left).get("flags:string[]") == "JS_OBJECT":
             # ObjectPattern assignments
-            added_obj = G.add_obj_node(ast_node=ast_node, js_type="object")
+            added_obj = G.add_obj_node(ast_node=ast_node, js_type="object", name=f"obj_pattern_{ast_node}")
             for child in children:
                 value, key = G.get_ordered_ast_child_nodes(child)
                 handled_left = handle_var(G, value, side="left", extra=extra)
@@ -1026,7 +1026,7 @@ def handle_assign(G, ast_node, extra=None, right_override=None):
             return NodeHandleResult(obj_nodes=[added_obj])
         else:
             # ArrayPattern assignments
-            added_obj = G.add_obj_node(ast_node=ast_node, js_type="array")
+            added_obj = G.add_obj_node(ast_node=ast_node, js_type="array", name=f"array_pattern_{ast_node}")
             for i, child in enumerate(children):
                 handled_left = handle_var(G, child, side="left", extra=extra)
                 for obj in handled_right.obj_nodes:
@@ -1403,7 +1403,7 @@ def handle_op_by_objs(G, ast_node, extra=ExtraInfo(), saved={}):
                     result = wildcard
                     t = None  # implies 'object'
                     op = "unknown_add"
-                result_obj = G.add_obj_node(ast_node, t, result)
+                result_obj = G.add_obj_node(ast_node, t, result, name=f"({v1} + {v2})")
                 # logger.log(ATTENTION, f'{v1} + {v2}: {o1} {o2} -> {result_obj}')
                 add_contributes_to(G, [o1, o2], result_obj, op)
                 results.append(result_obj)
@@ -1411,7 +1411,7 @@ def handle_op_by_objs(G, ast_node, extra=ExtraInfo(), saved={}):
                 used_objs.add(o2)
         if len(left_objs) * len(right_objs) == 0:
             # always returns at least one value
-            results.append(G.add_obj_node(ast_node, None, wildcard))
+            results.append(G.add_obj_node(ast_node, None, wildcard, name="(unknown + unknown)"))
     elif flag == "BINARY_SUB":
         for i, o1 in enumerate(left_objs):
             for j, o2 in enumerate(right_objs):
@@ -1427,14 +1427,14 @@ def handle_op_by_objs(G, ast_node, extra=ExtraInfo(), saved={}):
                 else:
                     result = wildcard
                     t = None  # implies 'object'
-                result_obj = G.add_obj_node(ast_node, t, result)
+                result_obj = G.add_obj_node(ast_node, t, result, name=f"({v1} - {v2})")
                 add_contributes_to(G, [o1, o2], result_obj, "sub")
                 results.append(result_obj)
                 used_objs.add(o1)
                 used_objs.add(o2)
         if len(left_objs) * len(right_objs) == 0:
             # always returns at least one value
-            results.append(G.add_obj_node(ast_node, None, wildcard))
+            results.append(G.add_obj_node(ast_node, None, wildcard, name="(unknown - unknown)"))
     if G.get_node_attr(ast_node).get("type") == "AST_ASSIGN_OP":
         do_assign(
             G,
@@ -1481,7 +1481,7 @@ def handle_template(G: Graph, ast_node, extra=ExtraInfo()):
     def dfs(i=0, buffer="", used_objs=[]):
         nonlocal G, children, results, ast_node, extra
         if i == len(children):
-            result_obj = G.add_obj_node(ast_node, "string", value=buffer)
+            result_obj = G.add_obj_node(ast_node, "string", value=buffer, name=f"template_{ast_node}")
             add_contributes_to(G, used_objs, result_obj, operation="string_concat")
             results.append(result_obj)
             all_used_objs.update(used_objs)
@@ -1539,7 +1539,7 @@ def instantiate_obj(G, exp_ast_node, constructor_decl, branches=None):
     """
     # create the instantiated object
     # js_type=None: avoid automatically adding prototype
-    created_obj = G.add_obj_node(ast_node=exp_ast_node, js_type=None)
+    created_obj = G.add_obj_node(ast_node=exp_ast_node, js_type=None, name=f"obj_{exp_ast_node}")
     # add edge between obj and obj decl
     G.add_edge(created_obj, constructor_decl, {"type:TYPE": "OBJ_DECL"})
     # build the prototype chain
@@ -1821,9 +1821,9 @@ def handle_node(G: Graph, node_id, extra=None) -> NodeHandleResult:
         used_objs = set()
         children = G.get_ordered_ast_child_nodes(node_id)
         if G.get_node_attr(node_id).get("flags:string[]") == "JS_OBJECT":
-            added_obj = G.add_obj_node(node_id, "object")
+            added_obj = G.add_obj_node(node_id, "object", name=f"obj_{G.get_node_attr(node_id).get('name') or node_id}")
         else:
-            added_obj = G.add_obj_node(node_id, "array")
+            added_obj = G.add_obj_node(node_id, "array", name=f"arr_{G.get_node_attr(node_id).get('name') or node_id}")
             G.add_obj_as_prop(
                 prop_name="length",
                 js_type="number",
@@ -1997,7 +1997,7 @@ def handle_node(G: Graph, node_id, extra=None) -> NodeHandleResult:
             elif cur_type == "string":
                 if G.get_node_attr(node_id).get("flags:string[]") == "JS_REGEXP":
                     added_obj = G.add_obj_node(
-                        ast_node=node_id, js_type=None, value=code
+                        ast_node=node_id, js_type=None, value=code, name=f"regexp_{node_id}"
                     )
                     G.add_obj_as_prop(
                         "__proto__",
@@ -2451,7 +2451,7 @@ def handle_node(G: Graph, node_id, extra=None) -> NodeHandleResult:
                 else:
                     new_value = n - 1
                 updated_objs.append(
-                    G.add_obj_node(G.get_obj_def_ast_node(obj), "number", new_value)
+                    G.add_obj_node(G.get_obj_def_ast_node(obj), "number", new_value, name=f"{G.get_node_attr(obj).get('name')}_{new_value}")
                 )
             G.assign_obj_nodes_to_name_node(
                 name_node, updated_objs, branches=extra.branches
@@ -3151,7 +3151,7 @@ def call_func_obj(
                         ).format(func_ast, func_name or "{anonymous}", func_obj)
                     )
                     # print(dont_skip)
-                    obj = G.add_obj_node(js_type=None, value=wildcard)
+                    obj = G.add_obj_node(js_type=None, value=wildcard, name=f"UnresolvedReturnValueOf{func_name}")
                     G.set_node_attr(obj, ("unresolved", True))
                     G.set_node_attr(
                         obj,
@@ -3359,6 +3359,7 @@ def call_func_obj(
                         # give __proto__ when checking prototype pollution
                         js_type="object" if G.check_proto_pollution else None,
                         value=wildcard,
+                        name=f"UnresolvedParam{j}Of{func_name}"
                     )
                     if mark_fake_args:
                         G.set_node_attr(added_obj, ("tainted", True))
@@ -3447,6 +3448,7 @@ def call_func_obj(
                     ast_node=dummy_stmt if G.new_trace_rule else call_ast,
                     js_type="object",
                     value=wildcard,
+                    name=f"ReturnValueOf{func_name}"
                 )
                 if G.get_node_attr(func_obj).get("tainted"):
                     G.set_node_attr(added_obj, ("tainted", True))
@@ -3472,6 +3474,7 @@ def call_func_obj(
                         ),  # really?
                         js_type="object",
                         value=wildcard,
+                        name=f"CreatedObjectBy{func_name}"
                     )
                     if G.get_node_attr(func_obj).get("tainted"):
                         G.set_node_attr(added_obj, ("tainted", True))
@@ -4186,7 +4189,7 @@ def decl_function(
         func_name = G.get_name_from_child(node_id)
 
     # add function declaration object
-    added_obj = G.add_obj_node(node_id, "function")
+    added_obj = G.add_obj_node(node_id, "function", name=func_name)
     G.set_node_attr(added_obj, ("name", func_name))
     # memorize its parent scope
     # Function scopes are not created when the function is declared.
@@ -4709,6 +4712,7 @@ def handle_require_legacy(G, node_id, extra=None):
                 result = esprima_parse(
                     file_path, ["-n", start_id, "-o", "-"], print_func=logger.info
                 )
+                G.files_parsed.append(file_path)
                 G.import_from_string(result)
                 # start from the AST_TOPLEVEL node instead of the File node
                 module_exports_objs = run_toplevel_file(G, str(int(start_id) + 1))
@@ -4792,6 +4796,7 @@ def handle_require(G: Graph, caller_ast, extra, _, module_names):
                 result = esprima_parse(
                     file_path, ["-n", start_id, "-o", "-"], print_func=logger.info
                 )
+                G.files_parsed.append(file_path)
                 G.import_from_string(result)
                 # start from the AST_TOPLEVEL node instead of the File node
                 # children = G.get_child_nodes(start_id, 'PARENT_OF') # why? shouldn't it be FILE_OF?
@@ -4863,7 +4868,7 @@ def handle_require(G: Graph, caller_ast, extra, _, module_names):
                     "Required module {} at {} not found!".format(module_name, file_path)
                 )
                 if file_ast_node is not None:
-                    module_exports_objs = [G.add_obj_node(js_type=None, value=wildcard)]
+                    module_exports_objs = [G.add_obj_node(js_type=None, value=wildcard, name=f"unresolved_module_exports_for_{file_ast_node}")]
             returned_objs.update(
                 module_exports_objs
             )  # It wasn't here. What a huge bug!!
@@ -6248,6 +6253,7 @@ def analyze_files(G, path, start_node_id=0, check_signatures=[]):
     result = esprima_parse(
         path, ["-n", str(start_node_id), "-o", "-"], print_func=logger.info
     )
+    G.files_parsed.append(path)
     G.import_from_string(result)
     if not G.check_signature_functions(check_signatures):
         return -1
@@ -6290,6 +6296,7 @@ def analyze_files(G, path, start_node_id=0, check_signatures=[]):
         G.first_pass = False
         time2 = time.time()
         generate_obj_graph(G, str(start_node_id))
+        G.print_graph()
         logger.info(
             sty.fg.green
             + sty.ef.b
@@ -6356,6 +6363,7 @@ def analyze_string(
     if expression:
         args = ["-e"] + args
     result = esprima_parse("-", args, input=source_code, print_func=logger.info)
+    G.files_parsed.append(f"stdin ({source_code[:30] + '...' if len(source_code) > 30 else source_code})")
     G.import_from_string(result)
     if generate_graph:
         if G.two_pass or G.coarse_only:
@@ -6367,6 +6375,7 @@ def analyze_string(
             logger.info(sty.fg.green + sty.ef.b + "1st run starts..." + sty.rs.all)
             time1 = time.time()
             generate_obj_graph(G, str(start_node_id))
+            G.print_graph()
             logger.info(
                 sty.fg.green
                 + sty.ef.b
@@ -6404,6 +6413,7 @@ def analyze_string(
             G.first_pass = False
             time2 = time.time()
             generate_obj_graph(G, str(start_node_id))
+            G.print_graph()
             logger.info(
                 sty.fg.green
                 + sty.ef.b
@@ -6552,6 +6562,7 @@ def analyze_json(G, json_str, start_node_id=0, extra=None):
         input=json_str,
         print_func=logger.info,
     )
+    G.files_parsed.append(f"stdin ({json_str[:30] + '...' if len(json_str) > 30 else json_str})")
     G.import_from_string(result)
 
     # remove all nodes and edges before the JSON object
@@ -6854,7 +6865,7 @@ def handle_for_in(G: Graph, ast_node, extra):
             else:
                 # assign the name to the loop variable as a new
                 # literal object
-                key_obj = G.add_obj_node(ast_node=ast_node, js_type="string", value=k)
+                key_obj = G.add_obj_node(ast_node=ast_node, js_type="string", value=k, name=str(k))
                 add_contributes_to(G, [obj], key_obj)
             logger.debug(
                 "For-in loop variables: "
@@ -6900,7 +6911,7 @@ def handle_for_in_fast(G: Graph, ast_node, extra):
         else:
             # assign the name to the loop variable as a new
             # literal object
-            key_obj = G.add_obj_node(ast_node=ast_node, js_type="string", value=k)
+            key_obj = G.add_obj_node(ast_node=ast_node, js_type="string", value=k, name=str(k))
         return key_obj
 
     obj, value, key, body = G.get_ordered_ast_child_nodes(ast_node)
@@ -7139,7 +7150,7 @@ def handle_for_of_legacy(G: Graph, ast_node, extra):
 def handle_class(G: Graph, ast_node, extra):
     children = G.get_ordered_ast_child_nodes(ast_node)
     name = G.get_node_attr(children[0]).get("code")
-    class_obj = G.add_obj_node(ast_node=None, js_type="function")
+    class_obj = G.add_obj_node(ast_node=None, js_type="function",name=name)
     G.set_node_attr(class_obj, ("name", name))
     G.set_node_attr(class_obj, ("value", f"[class {name}]"))
     # print(ast_node, G.get_node_attr(ast_node), children)
